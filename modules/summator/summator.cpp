@@ -41,7 +41,7 @@ void Summator::setCallback_Ref_FuncRef(  Ref<FuncRef> handler){
 
     handler->call_func(args, 1, err);
     this->_cb = handler;
-    this->_cb = call_func(args, 1, err);
+    this->_cb -> call_func(args, 1, err);
 }
 void Summator::callCallback(Variant &message){
     Variant a = Variant("Internal callCallback message say: meow");
@@ -58,6 +58,6 @@ void Summator::setCallback_Obj( Object * handler){
     const Variant *args[1] = {&a};
     Variant::CallError err;
     cb->call_func(args, 1, err);
-    this->_cb = Ref<FuncRef>(cb);
-    this->_cb = call_func(args, 1, err);
+    this->_cb = Ref<FuncRef>(memnew(FuncRef));
+    this->_cb->call_func(args, 1, err);
 }
