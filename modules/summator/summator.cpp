@@ -2,6 +2,7 @@
 
 #include "summator.h"
 #include "variant.h"
+#include "print_string.h"
 
 void Summator::add(int value) {
 
@@ -25,7 +26,7 @@ void Summator::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_total"), &Summator::get_total);
     ClassDB::bind_method(D_METHOD("setCallback_Obj", "handler"), &Summator::setCallback_Obj);
     ClassDB::bind_method(D_METHOD("setCallback_Ref_FuncRef","handler"), &Summator::setCallback_Ref_FuncRef);
-    ClassDB::bind_method(D_METHOD("callCallback","string"), &Summator::setCallback_Ref_FuncRef);
+    ClassDB::bind_method(D_METHOD("callCallback","message"), &Summator::setCallback_Ref_FuncRef);
 
 }
 
@@ -40,10 +41,15 @@ void Summator::setCallback_Ref_FuncRef(  Ref<FuncRef> handler){
 
     handler->call_func(args, 1, err);
     this->_cb = handler;
+    this->_cb = call_func(args, 1, err);
 }
-void Summator::callCallback(Variant &a){
-    const Variant *args[1] = {&a};
+void Summator::callCallback(Variant &message){
+    Variant a = Variant("Internal callCallback message say: meow");
+    const Variant *args[1] = {&message};
+    const Variant *args1[1] = {&a};
     Variant::CallError err;
+    print_line("ptr class " + _cb -> get_class());
+    _cb->call_func(args1, 1, err);
     _cb->call_func(args, 1, err);
 }
 void Summator::setCallback_Obj( Object * handler){
@@ -53,4 +59,5 @@ void Summator::setCallback_Obj( Object * handler){
     Variant::CallError err;
     cb->call_func(args, 1, err);
     this->_cb = Ref<FuncRef>(cb);
+    this->_cb = call_func(args, 1, err);
 }
