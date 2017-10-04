@@ -25,7 +25,7 @@ void Summator::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_total"), &Summator::get_total);
     ClassDB::bind_method(D_METHOD("setCallback_Obj", "handler"), &Summator::setCallback_Obj);
     ClassDB::bind_method(D_METHOD("setCallback_Ref_FuncRef","handler"), &Summator::setCallback_Ref_FuncRef);
-    ClassDB::bind_method(D_METHOD("call","string"), &Summator::setCallback_Ref_FuncRef);
+    ClassDB::bind_method(D_METHOD("callCallback","string"), &Summator::setCallback_Ref_FuncRef);
 
 }
 
@@ -41,9 +41,7 @@ void Summator::setCallback_Ref_FuncRef(  Ref<FuncRef> handler){
     handler->call_func(args, 1, err);
     this->_cb = handler;
 }
-void Summator::call(String s){
-    Variant a = Variant(s);
-
+void Summator::callCallback(Variant &a){
     const Variant *args[1] = {&a};
     Variant::CallError err;
     _cb->call_func(args, 1, err);

@@ -18,7 +18,7 @@ public:
     int get_total() const;
     void setCallback_Obj(Object * o);
     void setCallback_Ref_FuncRef(Ref<FuncRef> ref);
-    void call(String s);
+    void callCallback(Variant & a);
     Summator();
 };
 
