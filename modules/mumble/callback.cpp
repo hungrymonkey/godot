@@ -45,6 +45,7 @@ void SimpleCallback::MyCallBack::textMessage(
    }
 
 }
+
 void SimpleCallback::MyCallBack::version(
                 uint16_t major,
                 uint8_t minor,
@@ -53,6 +54,13 @@ void SimpleCallback::MyCallBack::version(
                 std::string os,
                 std::string os_version){ }
                 
+void SimpleCallback::MyCallBack::suggestConfig(
+                uint32_t version,
+                uint32_t positional,
+                uint32_t push_to_talk){
+    print_line( String("Postional audio is supported: ") + ((positional) ? "True" : "False"));
+}
+
 void SimpleCallback::_bind_methods(){
    ClassDB::bind_method(D_METHOD("setAudioHandler", "handler"), &SimpleCallback::setAudioHandler);
    ClassDB::bind_method(D_METHOD("setTextHandler", "handler"), &SimpleCallback::setTextHandler);

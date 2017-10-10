@@ -8,4 +8,7 @@ GODOT_PKGS="build-essential scons pkg-config libx11-dev libxcursor-dev libxinera
 
 MUMBLE_PKGS="liblog4cpp5-dev libboost-dev libprotobuf-dev protobuf-compiler libboost-system-dev"
 
-apt-get install -y $PKGS $GODOT_PKGS $MUMBLE_PKGS
+FACIAL_PKGS='libopencv-highgui-dev'
+
+apt-get install -y $PKGS $GODOT_PKGS $MUMBLE_PKGS $FACIAL_PKGS
+

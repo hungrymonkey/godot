@@ -51,6 +51,12 @@ private:
                     std::string release,
                     std::string os,
             std::string os_version);
+        
+        virtual void suggestConfig(
+                uint32_t version,
+                uint32_t positional,
+                uint32_t push_to_talk);
+        
     private:
         SimpleCallback &_cb;
     };
