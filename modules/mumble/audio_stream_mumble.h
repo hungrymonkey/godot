@@ -23,7 +23,8 @@ private:
 	bool active;
 	Ref<AudioStreamMumble> base;
 	int64_t offset;
-
+	template <class Depth, bool is_stereo>
+	void do_resample(const Depth *p_src, AudioFrame *p_dst, int64_t &offset, int32_t &increment, uint32_t amount);
 public:
 	AudioStreamPlaybackMumble();
 	~AudioStreamPlaybackMumble();
@@ -58,6 +59,7 @@ private:
 	int mix_rate;
 	int64_t offset;
 	void *data;
+	bool stereo;
 	
 public:
 	AudioStreamMumble();
