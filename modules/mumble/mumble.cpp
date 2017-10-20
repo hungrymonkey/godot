@@ -71,6 +71,7 @@ void Mumble::engage(String host, int port, String user, String password) {
 
 void Mumble::disengage(){
 	_pMumble->disengage();
+	_userState.clear();
 }
 void Mumble::start(){
 	_pMumble->start();
@@ -78,7 +79,12 @@ void Mumble::start(){
 void Mumble::sendText(const String text){
 	_pMumble -> sendText( text );
 }
-
+void Mumble::removeUser(uint32_t session_id){
+	_userState.erase(Variant(session_id));
+}
+void Mumble::addUser(String s, uint32_t session_id){
+	_userState[Variant(session_id)]=s;
+}
 void Mumble::sendAudio(Ref<AudioStreamSample> sample){
 
 	const PoolByteArray data = sample->get_data();

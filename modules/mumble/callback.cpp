@@ -4,7 +4,7 @@
 #include "print_string.h"
 #include "math/vector3.h"
 #include "scene/resources/audio_stream_sample.h"
-
+#include "mumble.h"
 
 
 void MyCallBack::audio( int target,
@@ -36,6 +36,19 @@ void MyCallBack::textMessage(
 //		const Variant *args[5] = {&a, &s, &c, &t, &m};
 	Variant result =  _mumble_ref.emit_signal( "text_message", m, a );
 
+}
+void MyCallBack::userRemove(uint32_t session, int32_t actor,
+		std::string reason, bool ban){
+	Mumble *m = Object::cast_to<Mumble>(&_mumble_ref);
+	m->removeUser(session);
+}
+void MyCallBack::userState(int32_t session, int32_t actor, std::string name, 
+		int32_t user_id, int32_t channel_id, int32_t mute, int32_t deaf, 
+		int32_t suppress, int32_t self_mute, int32_t self_deaf, std::string comment, 
+		std::string plugin_context, int32_t priority_speaker, int32_t recording){
+	
+	Mumble *m = Object::cast_to<Mumble>(&_mumble_ref);
+	m->addUser( String(name.c_str()), session);
 }
 void MyCallBack::version(
 				uint16_t major,

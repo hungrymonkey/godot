@@ -7,6 +7,8 @@
 #include "scene/resources/audio_stream_sample.h"
 #include "variant.h"
 #include "callback.h"
+#include "dictionary.h"
+
 
 class Mumble :  public Reference {
 	GDCLASS(Mumble,Reference);
@@ -15,6 +17,7 @@ private:
 		GDCLASS(_PrivateMumble,Reference);
 	private:
 		mumlib::Mumlib _mum;
+		
 	public:
 		_PrivateMumble(mumlib::Callback & c);
 		void engage(String host, int port, String user, String password);
@@ -35,10 +38,13 @@ public:
 	void start();
 	void sendText(const String message);
 	void sendAudio(Ref<AudioStreamSample> sample);
+	void removeUser(uint32_t user);
+	void addUser(String u, uint32_t user);
 	Mumble();
 //    ~Mumble();
 private:
 	MyCallBack _cb;
+	Dictionary _userState;
 };
 
 #endif
