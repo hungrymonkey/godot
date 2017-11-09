@@ -14,11 +14,15 @@ class AudioStreamPlaybackDummy : public AudioStreamPlayback {
 	GDCLASS(AudioStreamPlaybackDummy, AudioStreamPlayback)
 	friend class AudioStreamDummy;
 private:
+	enum{
+		PCM_BUFFER_SIZE = 4096
+	};
 	enum {
 		MIX_FRAC_BITS = 13,
 		MIX_FRAC_LEN = (1 << MIX_FRAC_BITS),
 		MIX_FRAC_MASK = MIX_FRAC_LEN - 1,
 	};
+	void * pcm_buffer;
 	Ref<AudioStreamDummy> base;
 	bool playing;
 public:
@@ -54,6 +58,7 @@ public:
 	void set_position(uint64_t pos);
 	virtual Ref<AudioStreamPlayback> instance_playback();
 	virtual String get_stream_name() const;
+	void gen_tone(uint16_t *, int frames);
 	AudioStreamDummy();
 	
 protected:

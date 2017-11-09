@@ -1,8 +1,12 @@
 #include "dummy_audiostream.h"
-
+#include "math/math_funcs.h"
 
 AudioStreamPlaybackDummy::AudioStreamPlaybackDummy() 
     : playing(false){
+        AudioServer::get_singleton()->lock();
+        pcm_buffer = AudioServer::get_singleton()->audio_data_alloc(PCM_BUFFER_SIZE);
+        zeromem(pcm_buffer, PCM_BUFFER_SIZE);
+        AudioServer::get_singleton()->unlock();
 }
 void AudioStreamPlaybackDummy::stop(){
     playing = false;
@@ -27,7 +31,10 @@ void AudioStreamPlaybackDummy::mix(AudioFrame *p_buffer, float p_rate_scale, int
 		}
 		return;
     }
-    
+    int64_t offset = 0;
+    zeromem(pcm_buffer, PCM_BUFFER_SIZE);
+    base->gen_tone((uint16_t * )pcm_buffer, p_frames);
+    do_resample<uint16_t, false>((uint16_t * ) pcm_buffer, p_buffer, offset, p_frames, p_frames);
 	
 }
 template <class Depth, bool is_stereo>
@@ -110,6 +117,12 @@ void AudioStreamDummy::reset() {
 }
 void AudioStreamDummy::set_position(uint64_t p) {
     pos = p;
+}
+void AudioStreamDummy::gen_tone(uint16_t * pcm_buf, int size){
+    for( int i = 0; i < size; i++){
+        sin(2.0*Math_PI*double(pos+i)/(double(mix_rate)/double(hz)));
+    }
+    pos += size;
 }
 void AudioStreamDummy::_bind_methods(){
 	ClassDB::bind_method(D_METHOD("reset"), &AudioStreamDummy::reset);
