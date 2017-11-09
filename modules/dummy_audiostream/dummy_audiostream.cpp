@@ -120,7 +120,7 @@ void AudioStreamDummy::set_position(uint64_t p) {
 }
 void AudioStreamDummy::gen_tone(uint16_t * pcm_buf, int size){
     for( int i = 0; i < size; i++){
-        sin(2.0*Math_PI*double(pos+i)/(double(mix_rate)/double(hz)));
+        pcm_buf[i] = sin(2.0*Math_PI*double(pos+i)/(double(mix_rate)/double(hz)));
     }
     pos += size;
 }
