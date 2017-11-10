@@ -24,7 +24,7 @@ private:
 	};
 	void * pcm_buffer;
 	Ref<AudioStreamDummy> base;
-	bool playing;
+	bool active;
 protected:
 	virtual float get_stream_sampling_rate();
 	virtual void _mix_internal(AudioFrame *p_buffer, int p_frames);
@@ -45,9 +45,6 @@ class AudioStreamDummy : public AudioStream {
 	GDCLASS(AudioStreamDummy, AudioStream)
 private:
 	friend class AudioStreamPlaybackDummy;
-	enum {
-		DATA_PAD = 16 //padding for interpolation
-	};
 	uint64_t pos;
 	int mix_rate;
 	bool stereo;
@@ -57,7 +54,7 @@ public:
 	void set_position(uint64_t pos);
 	virtual Ref<AudioStreamPlayback> instance_playback();
 	virtual String get_stream_name() const;
-	void gen_tone(uint16_t *, int frames);
+	void gen_tone(int16_t *, int frames);
 	AudioStreamDummy();
 	
 protected:
