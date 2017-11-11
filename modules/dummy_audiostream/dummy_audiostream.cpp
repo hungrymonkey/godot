@@ -32,13 +32,11 @@ void AudioStreamPlaybackDummy::_mix_internal(AudioFrame *p_buffer, int p_frames)
 	if (!active) {
 		return;
     }
-    zeromem(pcm_buffer, PCM_BUFFER_SIZE);
 	int smaller_buf = base->get_available_bytes()/2 < p_frames ? base->get_available_bytes()/2 : p_frames;
-    base->get_data((uint8_t *)pcm_buffer, smaller_buf * 2);
-	int16_t * buf = (int16_t * )pcm_buffer;
+
 
 	for(int i = 0;  i < smaller_buf; i++){
-		float sample =  float(buf[i])/32767.0;
+		float sample =  float(base->get_16())/32767.0;
 	//	print_line("0: " + rtos(sample));
 		p_buffer[i] = AudioFrame(sample, sample);
 	}
@@ -66,7 +64,7 @@ bool AudioStreamPlaybackDummy::is_playing() const {
 }
 
 AudioStreamDummy::AudioStreamDummy()
-    : mix_rate(48000), stereo(false), hz(639), pointer(0) {
+    : mix_rate(48000), stereo(false), hz(639) {
 	if(SDL_Init(SDL_INIT_AUDIO) < 0){
 		ERR_PRINTS("Couldn't initialize SDL: " + String(SDL_GetError()));
 	}
@@ -90,56 +88,34 @@ AudioStreamDummy::AudioStreamDummy()
 void AudioStreamDummy::_sdl_callback(void * usr_data, unsigned char * pcm, int len){
 	AudioStreamDummy *as = static_cast<AudioStreamDummy*>(usr_data);
 //	print_line("callback: "+itos(len));
-
 	as->put_data(pcm, len);	
 }
 int AudioStreamDummy::get_available_bytes() const{
-	return data.size() - pointer;
+	return data.size();
 }
-Error AudioStreamDummy::get_data(uint8_t *p_buffer, int p_bytes) {
-	int recv;
-	get_partial_data(p_buffer, p_bytes, recv);
-	if (recv != p_bytes)
-		return ERR_INVALID_PARAMETER;
-	return OK;
-}
+
 void AudioStreamDummy::talk(){
 	SDL_PauseAudioDevice(devid_in, SDL_FALSE);
 }
 void AudioStreamDummy::mute(){
 	SDL_PauseAudioDevice(devid_in, SDL_TRUE);
 }
-Error AudioStreamDummy::get_partial_data(uint8_t *p_buffer, int p_bytes, int &r_received) {
-		if (pointer + p_bytes > data.size()) {
-			r_received = data.size() - pointer;
-			if (r_received <= 0) {
-				r_received = 0;
-				return OK; //you got 0
-			}
-		} else {
-			r_received = p_bytes;
-		}
 
-		PoolVector<uint8_t>::Read r = data.read();
-		copymem(p_buffer, r.ptr() + pointer, r_received);
-
-		pointer += r_received;
-		// FIXME: return what? OK or ERR_*
-		// return OK for now so we don't maybe return garbage
-		return OK;
-}
 Error AudioStreamDummy::put_data(const uint8_t * pcm_data, int p_bytes){
-	if (p_bytes <= 0)
-		return OK;
-
-	if (pointer + p_bytes > data.size()) {
-		data.resize(pointer + p_bytes);
+	for(int i = 0; i < p_bytes; i++){
+		data.push_back(pcm_data[i]);
 	}
-
-	PoolVector<uint8_t>::Write w = data.write();
-	copymem(&w[pointer], pcm_data, p_bytes);	
 	emit_signal("audio_recieved");
 	return OK;
+}
+int AudioStreamDummy::get_16(){
+	uint8_t ptr[2];
+	ptr[0] = data[0];
+	ptr[1] = data[1];
+	data.pop_front();
+	data.pop_front();
+	uint16_t *buf = (uint16_t *) ptr;
+	return *buf;
 }
 Ref<AudioStreamPlayback> AudioStreamDummy::instance_playback(){
 	Ref<AudioStreamPlaybackDummy> talking_tree;
@@ -153,8 +129,7 @@ String AudioStreamDummy::get_stream_name() const {
 }
 void AudioStreamDummy::reset() {
     set_position(0);
-	data.resize(0);
-	pointer = 0;
+	data.clear();
 }
 void AudioStreamDummy::set_position(uint64_t p) {
     pos = p;

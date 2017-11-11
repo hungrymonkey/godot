@@ -7,6 +7,7 @@
 
 #include "servers/audio/audio_stream.h"
 #include "ustring.h"
+#include "list.h"
 #include <SDL.h>
 
 class AudioStreamDummy;
@@ -51,10 +52,8 @@ private:
 	int mix_rate;
 	bool stereo;
 	int hz;
-	int pointer;
-	PoolVector<uint8_t> data;
+	List<uint8_t> data;
 	Error put_data(const uint8_t * pcm_data, int size);
-	Error get_partial_data(uint8_t *p_buffer, int p_bytes, int &r_received);
 	static void _sdl_callback(void * usr_data, unsigned char * pcm, int len);
 public:
 	int get_available_bytes() const;
@@ -63,7 +62,7 @@ public:
 	virtual Ref<AudioStreamPlayback> instance_playback();
 	virtual String get_stream_name() const;
 	void gen_tone(int16_t *, int frames);
-	Error get_data(uint8_t *p_buffer, int p_bytes);
+	int get_16();
 	AudioStreamDummy();
 	void talk();
 	void mute();
