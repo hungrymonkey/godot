@@ -71,7 +71,7 @@ AudioStreamDummy::AudioStreamDummy()
 	SDL_AudioSpec wanted;
 	SDL_zero(wanted);
 	wanted.freq = 48000;
-	wanted.format = AUDIO_S16SYS;
+	wanted.format = AUDIO_F32SYS;
 	wanted.channels = 1;
 	//https://www.opus-codec.org/docs/html_api/group__opusencoder.html#ga88621a963b809ebfc27887f13518c966
 	//this is 8 frames or 160 ms
@@ -88,10 +88,10 @@ AudioStreamDummy::AudioStreamDummy()
 void AudioStreamDummy::_sdl_callback(void * usr_data, unsigned char * pcm, int len){
 	AudioStreamDummy *as = static_cast<AudioStreamDummy*>(usr_data);
 //	print_line("callback: "+itos(len));
-	as->put_data(pcm, len);	
+	as->put_data((float *)pcm, len/4);	
 }
 int AudioStreamDummy::get_available_bytes() const{
-	return data.size();
+	return data.size()*2;
 }
 
 void AudioStreamDummy::talk(){
@@ -101,21 +101,17 @@ void AudioStreamDummy::mute(){
 	SDL_PauseAudioDevice(devid_in, SDL_TRUE);
 }
 
-Error AudioStreamDummy::put_data(const uint8_t * pcm_data, int p_bytes){
-	for(int i = 0; i < p_bytes; i++){
-		data.push_back(pcm_data[i]);
+Error AudioStreamDummy::put_data(const float * pcm_data, int size){
+	for(int i = 0; i < size; i++){
+		data.push_back(pcm_data[i]*32767);
 	}
 	emit_signal("audio_recieved");
 	return OK;
 }
 int AudioStreamDummy::get_16(){
-	uint8_t ptr[2];
-	ptr[0] = data[0];
-	ptr[1] = data[1];
+	uint16_t buf = data[0];
 	data.pop_front();
-	data.pop_front();
-	uint16_t *buf = (uint16_t *) ptr;
-	return *buf;
+	return buf;
 }
 Ref<AudioStreamPlayback> AudioStreamDummy::instance_playback(){
 	Ref<AudioStreamPlaybackDummy> talking_tree;

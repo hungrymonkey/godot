@@ -52,8 +52,8 @@ private:
 	int mix_rate;
 	bool stereo;
 	int hz;
-	List<uint8_t> data;
-	Error put_data(const uint8_t * pcm_data, int size);
+	List<uint16_t> data;
+	Error put_data(const float * pcm_data, int size);
 	static void _sdl_callback(void * usr_data, unsigned char * pcm, int len);
 public:
 	int get_available_bytes() const;
