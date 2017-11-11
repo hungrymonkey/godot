@@ -19,6 +19,7 @@ void AudioStreamPlaybackDummy::start(float p_from_pos){
 //	base->mute();
     seek(p_from_pos);
     active = true;
+	_begin_resample();
 }
 void AudioStreamPlaybackDummy::seek(float p_time){
     float max = get_length();
@@ -32,7 +33,7 @@ void AudioStreamPlaybackDummy::_mix_internal(AudioFrame *p_buffer, int p_frames)
 	if (!active) {
 		return;
     }
-	int smaller_buf = base->get_available_bytes()/2 < p_frames ? base->get_available_bytes()/2 : p_frames;
+	int smaller_buf = MIN(base->get_available_bytes()/2, p_frames );
 
 
 	for(int i = 0;  i < smaller_buf; i++){
@@ -53,7 +54,7 @@ int AudioStreamPlaybackDummy::get_loop_count() const {
     return 0;
 }
 float AudioStreamPlaybackDummy::get_playback_position() const {
-    return 0.0;
+    return float(base->pos)/float(base->mix_rate);
 }
 float AudioStreamPlaybackDummy::get_length() const {
 	float a = base->get_available_bytes()/2;
