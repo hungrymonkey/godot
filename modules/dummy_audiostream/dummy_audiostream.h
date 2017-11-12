@@ -52,8 +52,8 @@ private:
 	int hz;
 	List<uint16_t> data;
 	Error put_data(const float * pcm_data, int size);
-	void append_data(Ref<PoolByteArray> pcm);
 public:
+	void append_data(PoolByteArray pcm);
 	int get_available_bytes() const;
 	void reset();
 	void set_position(uint64_t pos);

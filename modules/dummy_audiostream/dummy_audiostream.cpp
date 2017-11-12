@@ -69,8 +69,7 @@ bool AudioStreamPlaybackDummy::is_playing() const {
 
 AudioStreamDummy::AudioStreamDummy()
     : mix_rate(48000), stereo(false), hz(639) {
-	SDL2AudioCapture::get_singleton()->connect("get_pcm", this, "append_data");
-	SDL2AudioCapture::get_singleton()->talk();	
+	talk();
 }
 
 int AudioStreamDummy::get_available_bytes() const{
@@ -78,8 +77,12 @@ int AudioStreamDummy::get_available_bytes() const{
 }
 
 void AudioStreamDummy::talk(){
+	SDL2AudioCapture::get_singleton()->connect("get_pcm", this, "append_data");
+	SDL2AudioCapture::get_singleton()->talk();	
 }
 void AudioStreamDummy::mute(){
+	SDL2AudioCapture::get_singleton()->disconnect("get_pcm", this, "append_data");
+	SDL2AudioCapture::get_singleton()->mute();
 }
 
 Error AudioStreamDummy::put_data(const float * pcm_data, int size){
@@ -89,12 +92,12 @@ Error AudioStreamDummy::put_data(const float * pcm_data, int size){
 	//emit_signal("audio_recieved");
 	return OK;
 }
-void AudioStreamDummy::append_data(Ref<PoolByteArray> pcm){
-	for(int i = 0; i < pcm->size()/2; i++){
+void AudioStreamDummy::append_data(PoolByteArray pcm){
+	for(int i = 0; i < pcm.size()/2; i++){
 		int16_t buf;
 		uint8_t *ptr = (uint8_t *)&buf;
-		ptr[0] = pcm->get(2*i);
-		ptr[1] = pcm->get(2*i+1);
+		ptr[0] = pcm.get(2*i);
+		ptr[1] = pcm.get(2*i+1);
 		data.push_back(buf);
 	}
 	//emit_signal("audio_recieved");
@@ -131,6 +134,6 @@ void AudioStreamDummy::gen_tone(int16_t * pcm_buf, int size){
 void AudioStreamDummy::_bind_methods(){
 	ClassDB::bind_method(D_METHOD("reset"), &AudioStreamDummy::reset);
 	ClassDB::bind_method(D_METHOD("get_stream_name"), &AudioStreamDummy::get_stream_name);
-	//ClassDB::bind_method(D_METHOD("append_data", "pcm_16"), &AudioStreamDummy::append_data);
+	ClassDB::bind_method(D_METHOD("append_data", "pcm"), &AudioStreamDummy::append_data);
 	
 }
