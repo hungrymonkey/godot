@@ -8,7 +8,6 @@
 #include "servers/audio/audio_stream.h"
 #include "ustring.h"
 #include "list.h"
-#include <SDL.h>
 
 class AudioStreamDummy;
 
@@ -46,7 +45,6 @@ public:
 class AudioStreamDummy : public AudioStream {
 	GDCLASS(AudioStreamDummy, AudioStream)
 private:
-	SDL_AudioDeviceID devid_in;
 	friend class AudioStreamPlaybackDummy;
 	uint64_t pos;
 	int mix_rate;
@@ -54,7 +52,7 @@ private:
 	int hz;
 	List<uint16_t> data;
 	Error put_data(const float * pcm_data, int size);
-	static void _sdl_callback(void * usr_data, unsigned char * pcm, int len);
+	void append_data(Ref<PoolByteArray> pcm);
 public:
 	int get_available_bytes() const;
 	void reset();

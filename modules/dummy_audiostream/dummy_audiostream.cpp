@@ -1,12 +1,15 @@
 #include "dummy_audiostream.h"
 #include "math/math_funcs.h"
 #include "print_string.h"
+#include "sdl2_audiocapture.h"
+
 AudioStreamPlaybackDummy::AudioStreamPlaybackDummy() 
     : active(false){
         AudioServer::get_singleton()->lock();
         pcm_buffer = AudioServer::get_singleton()->audio_data_alloc(PCM_BUFFER_SIZE);
         zeromem(pcm_buffer, PCM_BUFFER_SIZE);
         AudioServer::get_singleton()->unlock();
+		
 }
 
 void AudioStreamPlaybackDummy::stop(){
@@ -66,48 +69,35 @@ bool AudioStreamPlaybackDummy::is_playing() const {
 
 AudioStreamDummy::AudioStreamDummy()
     : mix_rate(48000), stereo(false), hz(639) {
-	if(SDL_Init(SDL_INIT_AUDIO) < 0){
-		ERR_PRINTS("Couldn't initialize SDL: " + String(SDL_GetError()));
-	}
-	SDL_AudioSpec wanted;
-	SDL_zero(wanted);
-	wanted.freq = 48000;
-	wanted.format = AUDIO_F32SYS;
-	wanted.channels = 1;
-	//https://www.opus-codec.org/docs/html_api/group__opusencoder.html#ga88621a963b809ebfc27887f13518c966
-	//this is 8 frames or 160 ms
-	wanted.samples = 4096;
-	wanted.callback = AudioStreamDummy::_sdl_callback;
-	wanted.userdata = this;
-	//https://wiki.libsdl.org/SDL_OpenAudioDevice#device
-	devid_in = SDL_OpenAudioDevice(NULL, SDL_TRUE, &wanted, &wanted, 0);
-	if (!devid_in) {
-		ERR_PRINTS("Couldn't open an audio device for capture: " + String(SDL_GetError()));
-	}
-	SDL_PauseAudioDevice(devid_in, SDL_FALSE);
+	SDL2AudioCapture::get_singleton()->connect("get_pcm", this, "append_data");
+	SDL2AudioCapture::get_singleton()->talk();	
 }
-void AudioStreamDummy::_sdl_callback(void * usr_data, unsigned char * pcm, int len){
-	AudioStreamDummy *as = static_cast<AudioStreamDummy*>(usr_data);
-//	print_line("callback: "+itos(len));
-	as->put_data((float *)pcm, len/4);	
-}
+
 int AudioStreamDummy::get_available_bytes() const{
 	return data.size()*2;
 }
 
 void AudioStreamDummy::talk(){
-	SDL_PauseAudioDevice(devid_in, SDL_FALSE);
 }
 void AudioStreamDummy::mute(){
-	SDL_PauseAudioDevice(devid_in, SDL_TRUE);
 }
 
 Error AudioStreamDummy::put_data(const float * pcm_data, int size){
 	for(int i = 0; i < size; i++){
 		data.push_back(pcm_data[i]*32767);
 	}
-	emit_signal("audio_recieved");
+	//emit_signal("audio_recieved");
 	return OK;
+}
+void AudioStreamDummy::append_data(Ref<PoolByteArray> pcm){
+	for(int i = 0; i < pcm->size()/2; i++){
+		int16_t buf;
+		uint8_t *ptr = (uint8_t *)&buf;
+		ptr[0] = pcm->get(2*i);
+		ptr[1] = pcm->get(2*i+1);
+		data.push_back(buf);
+	}
+	//emit_signal("audio_recieved");
 }
 int AudioStreamDummy::get_16(){
 	uint16_t buf = data[0];
@@ -118,6 +108,7 @@ Ref<AudioStreamPlayback> AudioStreamDummy::instance_playback(){
 	Ref<AudioStreamPlaybackDummy> talking_tree;
 	talking_tree.instance();
 	talking_tree->base = Ref<AudioStreamDummy>(this);
+
 	return talking_tree;
 }
 
@@ -140,5 +131,6 @@ void AudioStreamDummy::gen_tone(int16_t * pcm_buf, int size){
 void AudioStreamDummy::_bind_methods(){
 	ClassDB::bind_method(D_METHOD("reset"), &AudioStreamDummy::reset);
 	ClassDB::bind_method(D_METHOD("get_stream_name"), &AudioStreamDummy::get_stream_name);
+	//ClassDB::bind_method(D_METHOD("append_data", "pcm_16"), &AudioStreamDummy::append_data);
 	
 }
