@@ -568,6 +568,11 @@ Ref<Theme> create_editor_theme(const Ref<Theme> p_theme) {
 	theme->set_constant("modulate_arrow", "OptionButton", true);
 
 	// CheckButton
+	theme->set_stylebox("normal", "CheckButton", style_menu);
+	theme->set_stylebox("pressed", "CheckButton", style_menu);
+	theme->set_stylebox("disabled", "CheckButton", style_menu);
+	theme->set_stylebox("hover", "CheckButton", style_menu);
+
 	theme->set_icon("on", "CheckButton", theme->get_icon("GuiToggleOn", "EditorIcons"));
 	theme->set_icon("off", "CheckButton", theme->get_icon("GuiToggleOff", "EditorIcons"));
 
@@ -801,6 +806,7 @@ Ref<Theme> create_editor_theme(const Ref<Theme> p_theme) {
 	theme->set_constant("close_h_ofs", "WindowDialog", 22 * EDSCALE);
 	theme->set_constant("close_v_ofs", "WindowDialog", 20 * EDSCALE);
 	theme->set_constant("title_height", "WindowDialog", 24 * EDSCALE);
+	theme->set_font("title_font", "WindowDialog", theme->get_font("title", "EditorFonts"));
 
 	// complex window, for now only Editor settings and Project settings
 	Ref<StyleBoxFlat> style_complex_window = style_window->duplicate();
@@ -1044,7 +1050,7 @@ Ref<Theme> create_editor_theme(const Ref<Theme> p_theme) {
 }
 
 Ref<Theme> create_custom_theme() {
-	Ref<Theme> theme;
+	Ref<Theme> theme = create_editor_theme();
 
 	String custom_theme = EditorSettings::get_singleton()->get("interface/theme/custom_theme");
 	if (custom_theme != "") {

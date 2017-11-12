@@ -1933,6 +1933,15 @@ void EditorNode::_menu_option_confirm(int p_option, bool p_confirmed) {
 		} break;
 		case FILE_EXPORT_TILESET: {
 
+			//Make sure that the scene has a root before trying to convert to tileset
+			if (!editor_data.get_edited_scene_root()) {
+				current_option = -1;
+				accept->get_ok()->set_text(TTR("I see.."));
+				accept->set_text(TTR("This operation can't be done without a root node."));
+				accept->popup_centered_minsize();
+				break;
+			}
+
 			List<String> extensions;
 			Ref<TileSet> ml(memnew(TileSet));
 			ResourceSaver::get_recognized_extensions(ml, &extensions);
@@ -3254,11 +3263,11 @@ void EditorNode::register_editor_types() {
 	ClassDB::register_class<EditorScript>();
 	ClassDB::register_class<EditorSelection>();
 	ClassDB::register_class<EditorFileDialog>();
-	ClassDB::register_class<EditorSettings>();
+	ClassDB::register_virtual_class<EditorSettings>();
 	ClassDB::register_class<EditorSpatialGizmo>();
-	ClassDB::register_class<EditorResourcePreview>();
+	ClassDB::register_virtual_class<EditorResourcePreview>();
 	ClassDB::register_class<EditorResourcePreviewGenerator>();
-	ClassDB::register_class<EditorFileSystem>();
+	ClassDB::register_virtual_class<EditorFileSystem>();
 	ClassDB::register_class<EditorFileSystemDirectory>();
 	ClassDB::register_virtual_class<ScriptEditor>();
 	ClassDB::register_virtual_class<EditorInterface>();
@@ -4217,61 +4226,53 @@ Variant EditorNode::drag_resource(const Ref<Resource> &p_res, Control *p_from) {
 	return drag_data;
 }
 
-Variant EditorNode::drag_files(const Vector<String> &p_files, Control *p_from) {
-
-	VBoxContainer *files = memnew(VBoxContainer);
-
-	int max_files = 6;
-
-	for (int i = 0; i < MIN(max_files, p_files.size()); i++) {
-
-		Label *label = memnew(Label);
-		label->set_text(p_files[i].get_file());
-		files->add_child(label);
+Variant EditorNode::drag_files_and_dirs(const Vector<String> &p_paths, Control *p_from) {
+	bool has_folder = false;
+	bool has_file = false;
+	for (int i = 0; i < p_paths.size(); i++) {
+		bool is_folder = p_paths[i].ends_with("/");
+		has_folder |= is_folder;
+		has_file |= !is_folder;
 	}
 
-	if (p_files.size() > max_files) {
-
+	int max_rows = 6;
+	int num_rows = p_paths.size() > max_rows ? max_rows - 1 : p_paths.size(); //Don't waste a row to say "1 more file" - list it instead.
+	VBoxContainer *vbox = memnew(VBoxContainer);
+	for (int i = 0; i < num_rows; i++) {
+		HBoxContainer *hbox = memnew(HBoxContainer);
+		TextureRect *icon = memnew(TextureRect);
 		Label *label = memnew(Label);
-		label->set_text(vformat(TTR("%d more file(s)"), p_files.size() - max_files));
-		files->add_child(label);
+
+		if (p_paths[i].ends_with("/")) {
+			label->set_text(p_paths[i].substr(0, p_paths[i].length() - 1).get_file());
+			icon->set_texture(gui_base->get_icon("Folder", "EditorIcons"));
+		} else {
+			label->set_text(p_paths[i].get_file());
+			icon->set_texture(gui_base->get_icon("File", "EditorIcons"));
+		}
+		icon->set_size(Size2(16, 16));
+		hbox->add_child(icon);
+		hbox->add_child(label);
+		vbox->add_child(hbox);
 	}
+
+	if (p_paths.size() > num_rows) {
+		Label *label = memnew(Label);
+		if (has_file && has_folder) {
+			label->set_text(vformat(TTR("%d more files or folders"), p_paths.size() - num_rows));
+		} else if (has_folder) {
+			label->set_text(vformat(TTR("%d more folders"), p_paths.size() - num_rows));
+		} else {
+			label->set_text(vformat(TTR("%d more files"), p_paths.size() - num_rows));
+		}
+		vbox->add_child(label);
+	}
+	p_from->set_drag_preview(vbox); //wait until it enters scene
+
 	Dictionary drag_data;
-	drag_data["type"] = "files";
-	drag_data["files"] = p_files;
+	drag_data["type"] = has_folder ? "files_and_dirs" : "files";
+	drag_data["files"] = p_paths;
 	drag_data["from"] = p_from;
-
-	p_from->set_drag_preview(files); //wait until it enters scene
-
-	return drag_data;
-}
-
-Variant EditorNode::drag_files_and_dirs(const Vector<String> &p_files, Control *p_from) {
-
-	VBoxContainer *files = memnew(VBoxContainer);
-
-	int max_files = 6;
-
-	for (int i = 0; i < MIN(max_files, p_files.size()); i++) {
-
-		Label *label = memnew(Label);
-		label->set_text(p_files[i].get_file());
-		files->add_child(label);
-	}
-
-	if (p_files.size() > max_files) {
-
-		Label *label = memnew(Label);
-		label->set_text(vformat(TTR("%d more file(s) or folder(s)"), p_files.size() - max_files));
-		files->add_child(label);
-	}
-	Dictionary drag_data;
-	drag_data["type"] = "files_and_dirs";
-	drag_data["files"] = p_files;
-	drag_data["from"] = p_from;
-
-	p_from->set_drag_preview(files); //wait until it enters scene
-
 	return drag_data;
 }
 
@@ -5387,12 +5388,12 @@ EditorNode::EditorNode() {
 	save_confirmation->connect("confirmed", this, "_menu_confirm_current");
 	save_confirmation->connect("custom_action", this, "_discard_changes");
 
-	file_templates = memnew(FileDialog);
+	file_templates = memnew(EditorFileDialog);
 	file_templates->set_title(TTR("Import Templates From ZIP File"));
 
 	gui_base->add_child(file_templates);
-	file_templates->set_mode(FileDialog::MODE_OPEN_FILE);
-	file_templates->set_access(FileDialog::ACCESS_FILESYSTEM);
+	file_templates->set_mode(EditorFileDialog::MODE_OPEN_FILE);
+	file_templates->set_access(EditorFileDialog::ACCESS_FILESYSTEM);
 	file_templates->clear_filters();
 	file_templates->add_filter("*.tpz ; Template Package");
 
@@ -5400,15 +5401,15 @@ EditorNode::EditorNode() {
 	gui_base->add_child(file);
 	file->set_current_dir("res://");
 
-	file_export = memnew(FileDialog);
-	file_export->set_access(FileDialog::ACCESS_FILESYSTEM);
+	file_export = memnew(EditorFileDialog);
+	file_export->set_access(EditorFileDialog::ACCESS_FILESYSTEM);
 	gui_base->add_child(file_export);
 	file_export->set_title(TTR("Export Project"));
 	file_export->connect("file_selected", this, "_dialog_action");
 
-	file_export_lib = memnew(FileDialog);
+	file_export_lib = memnew(EditorFileDialog);
 	file_export_lib->set_title(TTR("Export Library"));
-	file_export_lib->set_mode(FileDialog::MODE_SAVE_FILE);
+	file_export_lib->set_mode(EditorFileDialog::MODE_SAVE_FILE);
 	file_export_lib->connect("file_selected", this, "_dialog_action");
 	file_export_lib_merge = memnew(CheckButton);
 	file_export_lib_merge->set_text(TTR("Merge With Existing"));
@@ -5421,10 +5422,10 @@ EditorNode::EditorNode() {
 	file_export_password->set_editable(false);
 	file_export->get_vbox()->add_margin_child(TTR("Password:"), file_export_password);
 
-	file_script = memnew(FileDialog);
+	file_script = memnew(EditorFileDialog);
 	file_script->set_title(TTR("Open & Run a Script"));
-	file_script->set_access(FileDialog::ACCESS_FILESYSTEM);
-	file_script->set_mode(FileDialog::MODE_OPEN_FILE);
+	file_script->set_access(EditorFileDialog::ACCESS_FILESYSTEM);
+	file_script->set_mode(EditorFileDialog::MODE_OPEN_FILE);
 	List<String> sexts;
 	ResourceLoader::get_recognized_extensions_for_type("Script", &sexts);
 	for (List<String>::Element *E = sexts.front(); E; E = E->next()) {
