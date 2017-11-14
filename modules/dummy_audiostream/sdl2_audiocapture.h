@@ -24,7 +24,7 @@ private:
     Thread *thread;
 	Mutex *mutex;
 	SDL_AudioDeviceID devid_in;
-	SDL_AudioSpec wanted;
+	SDL_AudioSpec spec;
 	int get_available_frames() const;
 protected:
 	static void _bind_methods();

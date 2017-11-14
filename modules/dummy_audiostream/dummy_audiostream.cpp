@@ -20,6 +20,9 @@ void AudioStreamPlaybackDummy::stop(){
 
 void AudioStreamPlaybackDummy::start(float p_from_pos){
 //	base->mute();
+	if(base->get_available_bytes()<10000){
+		return;
+	}
     seek(p_from_pos);
     active = true;
 	_begin_resample();
@@ -40,7 +43,7 @@ void AudioStreamPlaybackDummy::_mix_internal(AudioFrame *p_buffer, int p_frames)
 
 
 	for(int i = 0;  i < smaller_buf; i++){
-		float sample =  float(base->get_16())/32767.0;
+		float sample =  float(base->get_16())/32768.0f;
 	//	print_line("0: " + rtos(sample));
 		p_buffer[i] = AudioFrame(sample, sample);
 	}
@@ -103,7 +106,7 @@ void AudioStreamDummy::append_data(PoolByteArray pcm){
 	//emit_signal("audio_recieved");
 }
 int AudioStreamDummy::get_16(){
-	uint16_t buf = data[0];
+	int16_t buf = data[0];
 	data.pop_front();
 	return buf;
 }
