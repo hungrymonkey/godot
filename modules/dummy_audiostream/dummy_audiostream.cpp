@@ -15,11 +15,11 @@ AudioStreamPlaybackDummy::AudioStreamPlaybackDummy()
 void AudioStreamPlaybackDummy::stop(){
     active = false;
     base->reset();
-//	base->talk();
+	base->talk();
 }
 
 void AudioStreamPlaybackDummy::start(float p_from_pos){
-//	base->mute();
+	base->mute();
 	if(base->get_available_bytes()<10000){
 		return;
 	}
@@ -37,6 +37,9 @@ void AudioStreamPlaybackDummy::seek(float p_time){
 void AudioStreamPlaybackDummy::_mix_internal(AudioFrame *p_buffer, int p_frames){
 	ERR_FAIL_COND(!active);
 	if (!active) {
+		for(int i = 0; i < p_frames; i++){
+			p_buffer[i] = AudioFrame(0,0);
+		}
 		return;
     }
 	int smaller_buf = MIN(base->get_available_bytes()/2, p_frames );
@@ -51,6 +54,7 @@ void AudioStreamPlaybackDummy::_mix_internal(AudioFrame *p_buffer, int p_frames)
 	while(todo){
 		p_buffer[p_frames-todo-1] = AudioFrame(0,0);
 		todo--;
+		active = false;
 	}
 }
 float AudioStreamPlaybackDummy::get_stream_sampling_rate(){
@@ -76,7 +80,7 @@ AudioStreamDummy::AudioStreamDummy()
 }
 
 int AudioStreamDummy::get_available_bytes() const{
-	return data.size()*2;
+	return data.size();
 }
 
 void AudioStreamDummy::talk(){
@@ -96,17 +100,18 @@ Error AudioStreamDummy::put_data(const float * pcm_data, int size){
 	return OK;
 }
 void AudioStreamDummy::append_data(PoolByteArray pcm){
-	for(int i = 0; i < pcm.size()/2; i++){
-		int16_t buf;
-		uint8_t *ptr = (uint8_t *)&buf;
-		ptr[0] = pcm.get(2*i);
-		ptr[1] = pcm.get(2*i+1);
-		data.push_back(buf);
+	for(int i = 0; i < pcm.size(); i++){
+
+		data.push_back(pcm[i]);
 	}
 	//emit_signal("audio_recieved");
 }
 int AudioStreamDummy::get_16(){
-	int16_t buf = data[0];
+	int16_t buf;
+	uint8_t *ptr = (uint8_t *) &buf;
+	ptr[0] = data[0];
+	ptr[1] = data[1];
+	data.pop_front();
 	data.pop_front();
 	return buf;
 }

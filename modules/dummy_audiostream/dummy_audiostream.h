@@ -50,7 +50,7 @@ private:
 	int mix_rate;
 	bool stereo;
 	int hz;
-	List<int16_t> data;
+	List<int8_t> data;
 	Error put_data(const float * pcm_data, int size);
 public:
 	void append_data(PoolByteArray pcm);
