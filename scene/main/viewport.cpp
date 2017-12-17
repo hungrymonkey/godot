@@ -69,6 +69,8 @@ void ViewportTexture::setup_local_to_scene() {
 	ERR_FAIL_COND(!vp);
 
 	vp->viewport_textures.insert(this);
+
+	VS::get_singleton()->texture_set_proxy(proxy, vp->texture_rid);
 }
 
 void ViewportTexture::set_viewport_path_in_scene(const NodePath &p_path) {
@@ -105,8 +107,8 @@ Size2 ViewportTexture::get_size() const {
 }
 RID ViewportTexture::get_rid() const {
 
-	ERR_FAIL_COND_V(!vp, RID());
-	return vp->texture_rid;
+	//ERR_FAIL_COND_V(!vp, RID());
+	return proxy;
 }
 
 bool ViewportTexture::has_alpha() const {
@@ -147,6 +149,7 @@ ViewportTexture::ViewportTexture() {
 
 	vp = NULL;
 	set_local_to_scene(true);
+	proxy = VS::get_singleton()->texture_create();
 }
 
 ViewportTexture::~ViewportTexture() {
@@ -154,6 +157,8 @@ ViewportTexture::~ViewportTexture() {
 	if (vp) {
 		vp->viewport_textures.erase(this);
 	}
+
+	VS::get_singleton()->free(proxy);
 }
 
 /////////////////////////////////////
@@ -456,10 +461,10 @@ void Viewport::_notification(int p_what) {
 			VS::get_singleton()->viewport_set_active(viewport, false);
 
 		} break;
-		case NOTIFICATION_FIXED_PROCESS: {
+		case NOTIFICATION_PHYSICS_PROCESS: {
 
 			if (gui.tooltip_timer >= 0) {
-				gui.tooltip_timer -= get_fixed_process_delta_time();
+				gui.tooltip_timer -= get_physics_process_delta_time();
 				if (gui.tooltip_timer < 0) {
 					_gui_show_tooltip();
 				}
@@ -539,7 +544,7 @@ void Viewport::_notification(int p_what) {
 
 						Vector2 point = get_canvas_transform().affine_inverse().xform(pos);
 						Physics2DDirectSpaceState::ShapeResult res[64];
-						int rc = ss2d->intersect_point(point, res, 64, Set<RID>(), 0xFFFFFFFF, 0xFFFFFFFF, true);
+						int rc = ss2d->intersect_point(point, res, 64, Set<RID>(), 0xFFFFFFFF, true);
 						for (int i = 0; i < rc; i++) {
 
 							if (res[i].collider_id && res[i].collider) {
@@ -622,7 +627,7 @@ void Viewport::_notification(int p_what) {
 							PhysicsDirectSpaceState *space = PhysicsServer::get_singleton()->space_get_direct_state(find_world()->get_space());
 							if (space) {
 
-								bool col = space->intersect_ray(from, from + dir * 10000, result, Set<RID>(), 0xFFFFFFFF, 0xFFFFFFFF, true);
+								bool col = space->intersect_ray(from, from + dir * 10000, result, Set<RID>(), 0xFFFFFFFF, true);
 								ObjectID new_collider = 0;
 								if (col) {
 
@@ -658,7 +663,7 @@ void Viewport::_notification(int p_what) {
 					PhysicsDirectSpaceState *space = PhysicsServer::get_singleton()->space_get_direct_state(find_world()->get_space());
 					if (space) {
 
-						bool col = space->intersect_ray(from, from + dir * 10000, result, Set<RID>(), 0xFFFFFFFF, 0xFFFFFFFF, true);
+						bool col = space->intersect_ray(from, from + dir * 10000, result, Set<RID>(), 0xFFFFFFFF, true);
 						ObjectID new_collider = 0;
 						if (col) {
 							CollisionObject *co = Object::cast_to<CollisionObject>(result.collider);
@@ -931,6 +936,9 @@ void Viewport::_camera_remove(Camera *p_camera) {
 
 	cameras.erase(p_camera);
 	if (camera == p_camera) {
+		if (camera && find_world().is_valid()) {
+			camera->notification(Camera::NOTIFICATION_LOST_CURRENT);
+		}
 		camera = NULL;
 	}
 }
@@ -1261,12 +1269,9 @@ Transform2D Viewport::_get_input_pre_xform() const {
 
 Vector2 Viewport::_get_window_offset() const {
 
-	/*
-	if (parent_control) {
-		return (parent_control->get_viewport()->get_final_transform() * parent_control->get_global_transform_with_canvas()).get_origin();
+	if (get_parent() && get_parent()->has_method("get_global_position")) {
+		return get_parent()->call("get_global_position");
 	}
-	*/
-
 	return Vector2();
 }
 
@@ -1416,7 +1421,7 @@ void Viewport::_gui_show_tooltip() {
 	gui.tooltip_label->set_anchor_and_margin(MARGIN_TOP, Control::ANCHOR_BEGIN, ttp->get_margin(MARGIN_TOP));
 	gui.tooltip_label->set_anchor_and_margin(MARGIN_RIGHT, Control::ANCHOR_END, -ttp->get_margin(MARGIN_RIGHT));
 	gui.tooltip_label->set_anchor_and_margin(MARGIN_BOTTOM, Control::ANCHOR_END, -ttp->get_margin(MARGIN_BOTTOM));
-	gui.tooltip_label->set_text(tooltip);
+	gui.tooltip_label->set_text(tooltip.strip_edges());
 	Rect2 r(gui.tooltip_pos + Point2(10, 10), gui.tooltip_label->get_combined_minimum_size() + ttp->get_minimum_size());
 	Rect2 vr = gui.tooltip_label->get_viewport_rect();
 	if (r.size.x + r.position.x > vr.size.x)
@@ -1641,6 +1646,8 @@ void Viewport::_gui_input_event(Ref<InputEvent> p_event) {
 
 			} else {
 
+				bool is_handled = false;
+
 				_gui_sort_modal_stack();
 				while (!gui.modal_stack.empty()) {
 
@@ -1658,9 +1665,18 @@ void Viewport::_gui_input_event(Ref<InputEvent> p_event) {
 						top->notification(Control::NOTIFICATION_MODAL_CLOSE);
 						top->_modal_stack_remove();
 						top->hide();
+
+						if (!top->pass_on_modal_close_click()) {
+							is_handled = true;
+						}
 					} else {
 						break;
 					}
+				}
+
+				if (is_handled) {
+					get_tree()->set_input_as_handled();
+					return;
 				}
 
 				//Matrix32 parent_xform;
@@ -2007,6 +2023,30 @@ void Viewport::_gui_input_event(Ref<InputEvent> p_event) {
 				touch_event->set_position(gui.focus_inv_xform.xform(pos));
 
 				_gui_call_input(gui.mouse_focus, touch_event);
+			}
+			get_tree()->set_input_as_handled();
+			return;
+		}
+	}
+
+	Ref<InputEventGesture> gesture_event = p_event;
+	if (gesture_event.is_valid()) {
+
+		Size2 pos = gesture_event->get_position();
+
+		Control *over = _gui_find_control(pos);
+		if (over) {
+
+			if (over->can_process()) {
+
+				gesture_event = gesture_event->xformed_by(Transform2D()); //make a copy
+				if (over == gui.mouse_focus) {
+					pos = gui.focus_inv_xform.xform(pos);
+				} else {
+					pos = over->get_global_transform_with_canvas().affine_inverse().xform(pos);
+				}
+				gesture_event->set_position(pos);
+				_gui_call_input(over, gesture_event);
 			}
 			get_tree()->set_input_as_handled();
 			return;
@@ -2371,8 +2411,13 @@ void Viewport::input(const Ref<InputEvent> &p_event) {
 
 	ERR_FAIL_COND(!is_inside_tree());
 
-	get_tree()->_call_input_pause(input_group, "_input", p_event); //not a bug, must happen before GUI, order is _input -> gui input -> _unhandled input
-	_gui_input_event(p_event);
+	if (!get_tree()->is_input_handled()) {
+		get_tree()->_call_input_pause(input_group, "_input", p_event); //not a bug, must happen before GUI, order is _input -> gui input -> _unhandled input
+	}
+
+	if (!get_tree()->is_input_handled()) {
+		_gui_input_event(p_event);
+	}
 	//get_tree()->call_group(SceneTree::GROUP_CALL_REVERSE|SceneTree::GROUP_CALL_REALTIME|SceneTree::GROUP_CALL_MULIILEVEL,gui_input_group,"_gui_input",p_event); //special one for GUI, as controls use their own process check
 }
 
@@ -2453,7 +2498,7 @@ Rect2 Viewport::get_attach_to_screen_rect() const {
 void Viewport::set_physics_object_picking(bool p_enable) {
 
 	physics_object_picking = p_enable;
-	set_fixed_process(physics_object_picking);
+	set_physics_process(physics_object_picking);
 	if (!physics_object_picking)
 		physics_picking_events.clear();
 }
@@ -2711,7 +2756,7 @@ void Viewport::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "debug_draw", PROPERTY_HINT_ENUM, "Disabled,Unshaded,Overdraw,Wireframe"), "set_debug_draw", "get_debug_draw");
 	ADD_GROUP("Render Target", "render_target_");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "render_target_v_flip"), "set_vflip", "get_vflip");
-	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "render_target_clear_mode", PROPERTY_HINT_ENUM, "Always,Never,NextFrame"), "set_clear_mode", "get_clear_mode");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "render_target_clear_mode", PROPERTY_HINT_ENUM, "Always,Never,Next Frame"), "set_clear_mode", "get_clear_mode");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "render_target_update_mode", PROPERTY_HINT_ENUM, "Disabled,Once,When Visible,Always"), "set_update_mode", "get_update_mode");
 	ADD_GROUP("Audio Listener", "audio_listener_");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "audio_listener_enable_2d"), "set_as_audio_listener_2d", "is_audio_listener_2d");
@@ -2784,6 +2829,7 @@ Viewport::Viewport() {
 	default_texture.instance();
 	default_texture->vp = const_cast<Viewport *>(this);
 	viewport_textures.insert(default_texture.ptr());
+	VS::get_singleton()->texture_set_proxy(default_texture->proxy, texture_rid);
 
 	//internal_listener = SpatialSoundServer::get_singleton()->listener_create();
 	audio_listener = false;

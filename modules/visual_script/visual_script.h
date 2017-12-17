@@ -339,8 +339,6 @@ public:
 
 	virtual bool is_tool() const;
 
-	virtual String get_node_type() const;
-
 	virtual ScriptLanguage *get_language() const;
 
 	virtual bool has_script_signal(const StringName &p_signal) const;
@@ -569,6 +567,7 @@ public:
 	virtual bool validate(const String &p_script, int &r_line_error, int &r_col_error, String &r_test_error, const String &p_path = "", List<String> *r_functions = NULL) const;
 	virtual Script *create_script() const;
 	virtual bool has_named_classes() const;
+	virtual bool supports_builtin_mode() const;
 	virtual int find_function(const String &p_function, const String &p_code) const;
 	virtual String make_function(const String &p_class, const String &p_name, const PoolStringArray &p_args) const;
 	virtual void auto_indent_code(String &p_code, int p_from_line, int p_to_line) const;
@@ -601,6 +600,7 @@ public:
 	virtual int profiling_get_frame_data(ProfilingInfo *p_info_arr, int p_info_max);
 
 	void add_register_func(const String &p_name, VisualScriptNodeRegisterFunc p_func);
+	void remove_register_func(const String &p_name);
 	Ref<VisualScriptNode> create_node_from_name(const String &p_name);
 	void get_registered_node_names(List<String> *r_names);
 

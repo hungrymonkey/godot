@@ -19,9 +19,10 @@ def can_build():
 
 
 def get_opts():
+    from SCons.Variables import EnumVariable
 
     return [
-        ('debug_symbols', 'Add debug symbols to release version (yes/no/full)', 'yes')
+        EnumVariable('debug_symbols', 'Add debug symbols to release version', 'yes', ('yes', 'no', 'full')),
     ]
 
 
@@ -66,7 +67,7 @@ def configure(env):
     ## Flags
 
     env.Append(CPPPATH=['#platform/haiku'])
-    env.Append(CPPFLAGS=['-DUNIX_ENABLED', '-DOPENGL_ENABLED', '-DGLES2_ENABLED', '-DGLES_OVER_GL'])
+    env.Append(CPPFLAGS=['-DUNIX_ENABLED', '-DOPENGL_ENABLED', '-DGLES_ENABLED', '-DGLES_OVER_GL'])
     env.Append(CPPFLAGS=['-DMEDIA_KIT_ENABLED'])
     # env.Append(CCFLAGS=['-DFREETYPE_ENABLED'])
     env.Append(CPPFLAGS=['-DPTHREAD_NO_RENAME'])  # TODO: enable when we have pthread_setname_np

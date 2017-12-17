@@ -62,6 +62,7 @@ class ScriptCreateDialog : public ConfirmationDialog {
 	bool is_new_script_created;
 	bool is_path_valid;
 	bool has_named_classes;
+	bool supports_built_in;
 	bool can_inherit_from_file;
 	bool is_parent_name_valid;
 	bool is_class_name_valid;
@@ -72,6 +73,7 @@ class ScriptCreateDialog : public ConfirmationDialog {
 	Vector<String> template_list;
 
 	void _path_changed(const String &p_path = String());
+	void _path_entered(const String &p_path = String());
 	void _lang_changed(int l = 0);
 	void _built_in_pressed();
 	bool _validate(const String &p_string);

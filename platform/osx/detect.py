@@ -19,10 +19,11 @@ def can_build():
 
 
 def get_opts():
+    from SCons.Variables import EnumVariable
 
     return [
         ('osxcross_sdk', 'OSXCross SDK version', 'darwin14'),
-        ('debug_symbols', 'Add debug symbols to release version (yes/no/full)', 'yes'),
+        EnumVariable('debug_symbols', 'Add debug symbols to release version', 'yes', ('yes', 'no', 'full')),
     ]
 
 
@@ -61,7 +62,7 @@ def configure(env):
 
     ## Compiler configuration
 
-    if (not os.environ.has_key("OSXCROSS_ROOT")): # regular native build
+    if "OSXCROSS_ROOT" not in os.environ: # regular native build
         if (env["bits"] == "fat"):
             env.Append(CCFLAGS=['-arch', 'i386', '-arch', 'x86_64'])
             env.Append(LINKFLAGS=['-arch', 'i386', '-arch', 'x86_64'])
@@ -71,6 +72,19 @@ def configure(env):
         else: # 64-bit, default
             env.Append(CCFLAGS=['-arch', 'x86_64'])
             env.Append(LINKFLAGS=['-arch', 'x86_64'])
+        if (env["macports_clang"] != 'no'):
+            mpprefix = os.environ.get("MACPORTS_PREFIX", "/opt/local")
+            mpclangver = env["macports_clang"]
+            env["CC"] = mpprefix + "/libexec/llvm-" + mpclangver + "/bin/clang"
+            env["LD"] = mpprefix + "/libexec/llvm-" + mpclangver + "/bin/clang++"
+            env["CXX"] = mpprefix + "/libexec/llvm-" + mpclangver + "/bin/clang++"
+            env['AR'] = mpprefix + "/libexec/llvm-" + mpclangver + "/bin/llvm-ar"
+            env['RANLIB'] = mpprefix + "/libexec/llvm-" + mpclangver + "/bin/llvm-ranlib"
+            env['AS'] = mpprefix + "/libexec/llvm-" + mpclangver + "/bin/llvm-as"
+            env.Append(CCFLAGS=['-D__MACPORTS__']) #hack to fix libvpx MM256_BROADCASTSI128_SI256 define
+            if (env["openmp"]):
+                env.Append(CPPFLAGS=['-fopenmp'])
+                env.Append(LINKFLAGS=['-fopenmp'])
 
     else: # osxcross build
         root = os.environ.get("OSXCROSS_ROOT", 0)
@@ -83,8 +97,15 @@ def configure(env):
         else: # 64-bit, default
             basecmd = root + "/target/bin/x86_64-apple-" + env["osxcross_sdk"] + "-"
 
-        env['CC'] = basecmd + "cc"
-        env['CXX'] = basecmd + "c++"
+        ccache_path = os.environ.get("CCACHE")
+        if ccache_path == None:
+            env['CC'] = basecmd + "cc"
+            env['CXX'] = basecmd + "c++"
+        else:
+            # there aren't any ccache wrappers available for OS X cross-compile,
+            # to enable caching we need to prepend the path to the ccache binary
+            env['CC'] = ccache_path + ' ' + basecmd + "cc"
+            env['CXX'] = ccache_path + ' ' + basecmd + "c++"
         env['AR'] = basecmd + "ar"
         env['RANLIB'] = basecmd + "ranlib"
         env['AS'] = basecmd + "as"
@@ -96,13 +117,13 @@ def configure(env):
 
     ## Dependencies
 
-    if (env['builtin_libtheora'] != 'no'):
+    if env['builtin_libtheora']:
         env["x86_libtheora_opt_gcc"] = True
 
     ## Flags
 
     env.Append(CPPPATH=['#platform/osx'])
-    env.Append(CPPFLAGS=['-DOSX_ENABLED', '-DUNIX_ENABLED', '-DGLES2_ENABLED', '-DAPPLE_STYLE_KEYS'])
+    env.Append(CPPFLAGS=['-DOSX_ENABLED', '-DUNIX_ENABLED', '-DGLES_ENABLED', '-DAPPLE_STYLE_KEYS', '-DCOREAUDIO_ENABLED'])
     env.Append(LINKFLAGS=['-framework', 'Cocoa', '-framework', 'Carbon', '-framework', 'OpenGL', '-framework', 'AGL', '-framework', 'AudioUnit', '-framework', 'CoreAudio', '-lz', '-framework', 'IOKit', '-framework', 'ForceFeedback'])
     env.Append(LIBS=['pthread'])
 

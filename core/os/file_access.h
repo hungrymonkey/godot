@@ -119,6 +119,7 @@ public:
 
 	virtual Error get_error() const = 0; ///< get last error
 
+	virtual void flush() = 0;
 	virtual void store_8(uint8_t p_dest) = 0; ///< store a byte
 	virtual void store_16(uint16_t p_dest); ///< store 16 bits uint
 	virtual void store_32(uint32_t p_dest); ///< store 32 bits uint
@@ -140,7 +141,7 @@ public:
 
 	virtual Error reopen(const String &p_path, int p_mode_flags); ///< does not change the AccessType
 
-	virtual Error _chmod(const String &p_path, int p_mod) { return FAILED; }
+	virtual Error _chmod(const String &p_path, int p_mod) { return ERR_UNAVAILABLE; }
 
 	static FileAccess *create(AccessType p_access); /// Create a file access (for the current platform) this is the only portable way of accessing files.
 	static FileAccess *create_for_path(const String &p_path);

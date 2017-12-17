@@ -1196,14 +1196,14 @@ void AnimationTreeEditor::_edit_filters() {
 		if (base) {
 			NodePath np = E->get();
 
-			if (np.get_property() != StringName()) {
+			if (np.get_subname_count() == 1) {
 				Node *n = base->get_node(np);
 				Skeleton *s = Object::cast_to<Skeleton>(n);
 				if (s) {
 
 					String skelbase = E->get().substr(0, E->get().find(":"));
 
-					int bidx = s->find_bone(np.get_property());
+					int bidx = s->find_bone(np.get_subname(0));
 
 					if (bidx != -1) {
 						int bparent = s->get_bone_parent(bidx);
@@ -1213,7 +1213,7 @@ void AnimationTreeEditor::_edit_filters() {
 							String bpn = skelbase + ":" + s->get_bone_name(bparent);
 							if (pm.has(bpn)) {
 								parent = pm[bpn];
-								descr = np.get_property();
+								descr = np.get_subname(0);
 							}
 						} else {
 
@@ -1419,13 +1419,13 @@ void AnimationTreeEditorPlugin::make_visible(bool p_visible) {
 		//editor->animation_panel_make_visible(true);
 		button->show();
 		editor->make_bottom_panel_item_visible(anim_tree_editor);
-		anim_tree_editor->set_fixed_process(true);
+		anim_tree_editor->set_physics_process(true);
 	} else {
 
 		if (anim_tree_editor->is_visible_in_tree())
 			editor->hide_bottom_panel();
 		button->hide();
-		anim_tree_editor->set_fixed_process(false);
+		anim_tree_editor->set_physics_process(false);
 	}
 }
 
