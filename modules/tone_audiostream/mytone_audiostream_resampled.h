@@ -52,6 +52,7 @@ public:
 	virtual Ref<AudioStreamPlayback> instance_playback();
 	virtual String get_stream_name() const;
 	void gen_tone(int16_t *, int frames);
+	virtual float get_length() const { return 0.0; }
 	AudioStreamMyToneResampled();
 	
 protected:
