@@ -32,6 +32,26 @@ if env['builtin_opus']:
 	if env['builtin_libogg']:
 		env_talkingtree.Append(CPPPATH=["#thirdparty/libogg"])
 
+benet_dir = '#modules/benet/'
+if env['builtin_enet']:
+	thirdparty_enet_dir = "#thirdparty/enet/"
+	thirdparty_enet_sources = [
+        "callbacks.c",
+        "compress.c",
+        "host.c",
+        "list.c",
+        "packet.c",
+        "peer.c",
+        "protocol.c",
+        "godot.cpp"
+	]
+	thirdparty_enet_sources = [thirdparty_enet_dir + file for file in thirdparty_enet_sources]
+	env_talkingtree.Append(CPPPATH=[thirdparty_enet_dir])
+	env_talkingtree.Append(CPPFLAGS=["-DGODOT_ENET"])
+env_talkingtree.Append(CPPPATH=[benet_dir])
+
+
+
 talkingtree_dir = '#modules/talkingtree/'
 protobuf_proto = 'TalkingTree.proto'
 

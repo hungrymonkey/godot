@@ -108,15 +108,16 @@ void TalkingTree::_create_audio_peer_stream(int p_id){
 }
 
 void TalkingTree::_send_packet(int p_to, PacketType type, google::protobuf::Message &message, NetworkedMultiplayerPeer::TransferMode transferMode){
-	Vector<uint8_t> packet;
+	PoolByteArray packet;
 	//incorrect
 	packet.resize(1 + message.ByteSize());
-	packet[0] = (uint8_t)type;
-	encode_uint32(message.ByteSize(), &packet[1]);
-	message.SerializeToArray( &packet[1], message.ByteSize());
+	packet.set(0, (uint8_t)type);
+	PoolByteArray::Write wptr = packet.write();
+	encode_uint32(message.ByteSize(), &wptr[1]);
+	message.SerializeToArray( &wptr[1], message.ByteSize());
 	network_peer->set_transfer_mode(transferMode);
 	network_peer->set_target_peer(p_to);
-	network_peer->put_packet(packet.ptr(), packet.size());
+	network_peer->_put_packet_channel(packet, 0);
 }
 
 void TalkingTree::_network_process_packet(int p_from, const uint8_t *p_packet, int p_packet_len) {
@@ -173,13 +174,13 @@ bool TalkingTree::is_network_server() const {
 bool TalkingTree::has_network_peer() const {
 	return network_peer.is_valid();
 }
-void TalkingTree::set_game_network_peer(const Ref<NetworkedMultiplayerPeer> &p_network_peer){
+void TalkingTree::set_game_network_peer(const Ref<ENetPacketPeer> &p_network_peer){
 	game_peer = p_network_peer;
 	if (game_peer.is_valid()) {
 	}
 
 }
-void TalkingTree::set_network_peer(const Ref<NetworkedMultiplayerPeer> &p_network_peer) {
+void TalkingTree::set_network_peer(const Ref<ENetPacketPeer> &p_network_peer) {
 	if (network_peer.is_valid()) {
 		network_peer->disconnect("peer_connected", this, "_network_peer_connected");
 		network_peer->disconnect("peer_disconnected", this, "_network_peer_disconnected");
@@ -350,18 +351,19 @@ int TalkingTree::_encode_audio_frame(int target, PoolVector<uint8_t> &pcm){
 	int seqNum = 100 * pcm.size()/2 / TalkingTree::SAMPLE_RATE;	
 	outgoing_sequence_number += seqNum;
 
-	Vector<uint8_t> audiobuf;
+	PoolByteArray audiobuf;
 	audiobuf.resize(1 + 1 + encoded_seq.size() + encoded_size.size() + output_size);
-	audiobuf[1] = 0x00 | target;
-	copymem( &audiobuf[2],  encoded_seq.ptr(), encoded_seq.size() );
-	copymem( &audiobuf[2 + encoded_seq.size()],  encoded_size.ptr(), encoded_size.size() );
-	copymem( &audiobuf[2 + encoded_seq.size() + encoded_size.size()],  opus_buf, output_size );
+	audiobuf.set(1, 0x00 | target);
+	PoolByteArray::Write w = audiobuf.write();
+	copymem( &w[2],  encoded_seq.ptr(), encoded_seq.size() );
+	copymem( &w[2 + encoded_seq.size()],  encoded_size.ptr(), encoded_size.size() );
+	copymem( &w[2 + encoded_seq.size() + encoded_size.size()],  opus_buf, output_size );
 
 	
 	last_sent_audio_timestamp = OS::get_singleton()->get_ticks_msec();
-	audiobuf[0] = (uint8_t) PacketType::UDPTUNNEL;
+	audiobuf.set(0, (uint8_t) PacketType::UDPTUNNEL);
 	network_peer->set_transfer_mode(NetworkedMultiplayerPeer::TRANSFER_MODE_UNRELIABLE_ORDERED);
 	network_peer->set_target_peer(0);
-	network_peer->put_packet(audiobuf.ptr(), audiobuf.size());
+	network_peer->_put_packet_channel(audiobuf, 0);
 	return audiobuf.size();
 }

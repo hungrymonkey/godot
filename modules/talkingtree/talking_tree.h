@@ -9,6 +9,8 @@
 #include "scene/main/timer.h"
 #include "audio_stream_talking_tree.h"
 #include "utils.h"
+
+#include "modules/benet/enet_packet_peer.h"
 #include <opus.h>
 #include <google/protobuf/message.h>
 
@@ -21,8 +23,8 @@ protected:
 public:
 	TalkingTree();
 	~TalkingTree();
-	void set_network_peer(const Ref<NetworkedMultiplayerPeer> &p_network_peer);
-	void set_game_network_peer(const Ref<NetworkedMultiplayerPeer> &p_network_peer);
+	void set_network_peer(const Ref<ENetPacketPeer> &p_network_peer);
+	void set_game_network_peer(const Ref<ENetPacketPeer> &p_network_peer);
 	Vector<int> get_network_connected_peers() const;
 	bool is_network_server() const;
 	bool has_network_peer() const;
@@ -40,8 +42,8 @@ public:
 
 private:
 	int last_send_cache_id;
-	Ref<NetworkedMultiplayerPeer> network_peer;
-	Ref<NetworkedMultiplayerPeer> game_peer;
+	Ref<ENetPacketPeer> network_peer;
+	Ref<ENetPacketPeer> game_peer;
 	void _send_user_info(int p_to);
 	void _send_packet(int p_to, PacketType type, google::protobuf::Message &message, NetworkedMultiplayerPeer::TransferMode transfer);
 	void _network_process_packet(int p_from, const uint8_t *p_packet, int p_packet_len);
