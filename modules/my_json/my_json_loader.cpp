@@ -8,7 +8,6 @@ RES ResourceFormatLoaderMyJson::load(const String &p_path, const String &p_origi
 	if (r_error)
 		*r_error = OK;
 	Error err = my->set_file(p_path);
-	*r_error = err;
 	return Ref<MyJson>(my);
 }
 

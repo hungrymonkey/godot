@@ -1,5 +1,4 @@
 /* register_types.cpp */
-
 #include "register_types.h"
 #include "class_db.h"
 
