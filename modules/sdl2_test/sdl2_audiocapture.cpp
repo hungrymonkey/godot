@@ -63,21 +63,13 @@ void SDL2AudioCapture::thread_func(void *p_udata){
 
 	uint64_t usdelay = 20000;
 	while(!ac -> exit_thread){
-		/*
+
+		
 		if(ac->recording()){
 			ac->lock();
-			int frames = ac->get_available_frames();
-			int16_t buf[SDL2AudioCapture::FRAME_SIZE];
-			PoolVector<uint8_t> pcm;
-			pcm.resize(sizeof(buf));
-			for(int i = 0; i < frames; i++){
-				uint32_t bytes = SDL_DequeueAudio( ac->devid_in, buf, sizeof(buf));
-				PoolVector<uint8_t>::Write w = pcm.write();
-				copymem(w.ptr(), buf, sizeof(buf));
-				ac->emit_signal("get_pcm", pcm);
-			}
+			ac->flush();
 			ac->unlock();
-		}*/
+		}
 		OS::get_singleton()->delay_usec(usdelay);
 	}
 }
@@ -85,6 +77,7 @@ void SDL2AudioCapture::thread_func(void *p_udata){
 void SDL2AudioCapture::_bind_methods() {
 	ADD_SIGNAL(MethodInfo("emit_pcm", PropertyInfo(Variant::POOL_BYTE_ARRAY, "audio_frame")));
 }
+
 Error SDL2AudioCapture::init(){
 	thread_exited = false;
 	mutex = Mutex::create();
@@ -122,14 +115,45 @@ SDL2AudioCapture::SDL2AudioCapture() {
 	thread = NULL;
 	singleton = this;
 }
-
+void SDL2AudioCapture::flush() {
+	for(const Set<RID>::Element *E = running_devices.front(); E; E->next()){
+		RID rid = E->get();
+		auto ptr = mic_owner.getornull(rid);
+		if(ptr){
+			int frames = ptr->get_available_frames();
+			for(int i = 0; i < frames; i++){
+				emit_signal("emit_pcm", ptr->get_frame());
+			}
+		}
+	}
+	
+}
 RID SDL2AudioCapture::create(int sample_rate, int format, int frame_size){
 	SDLDevice *dev = memnew(SDLDevice(sample_rate, format, frame_size));
 	return mic_owner.make_rid(dev);
 }
+bool SDL2AudioCapture::recording() const {
+	return running_devices.size() > 0;
+}
 void SDL2AudioCapture::destroy(RID dev) {
 	mic_owner.free(dev);
 }
+void SDL2AudioCapture::talk(RID device) {
+	SDLDevice * dev = mic_owner.getornull(device);
+	if(dev){
+		running_devices.insert(device);
+		dev->talk();
+	}
+}
+void SDL2AudioCapture::mute(RID device) {
+	SDLDevice * dev = mic_owner.getornull(device);
+	if(dev){
+		running_devices.erase(device);
+		dev->mute();
+	}
+}
+
+
 _SDL2AudioCapture *_SDL2AudioCapture::get_singleton() {
 	return singleton;
 }
@@ -149,9 +173,17 @@ RID _SDL2AudioCapture::create(int sample_rate, int format, int frame_size){
 void _SDL2AudioCapture::destroy(RID device) {
 	SDL2AudioCapture::get_singleton()->destroy(device);
 }
+void _SDL2AudioCapture::talk(RID device) {
+	SDL2AudioCapture::get_singleton()->talk(device);
+}
+void _SDL2AudioCapture::mute(RID device) {
+	SDL2AudioCapture::get_singleton()->mute(device);
+}
 void _SDL2AudioCapture::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("create", "sample_rate", "format", "frame_size"), &_SDL2AudioCapture::create);
 	ClassDB::bind_method(D_METHOD("destroy", "rid"), &_SDL2AudioCapture::destroy);
+	ClassDB::bind_method(D_METHOD("talk", "rid"), &_SDL2AudioCapture::talk);
+	ClassDB::bind_method(D_METHOD("mute", "rid"), &_SDL2AudioCapture::mute);
 
 	ClassDB::bind_method(D_METHOD("_emit_pcm"), &_SDL2AudioCapture::_emit_pcm);
 	ADD_SIGNAL(MethodInfo("emit_pcm", PropertyInfo(Variant::POOL_BYTE_ARRAY, "audio_frame")));

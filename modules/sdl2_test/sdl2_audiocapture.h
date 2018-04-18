@@ -4,6 +4,7 @@
 #include "object.h"
 #include "rid.h"
 #include "variant.h"
+#include "set.h"
 #include "os/thread.h"
 #include "os/mutex.h"
 #include <SDL.h>
@@ -47,6 +48,7 @@ protected:
 
 private:
 	mutable RID_Owner<SDLDevice> mic_owner;
+	Set<RID> running_devices;
 
 public:
 	enum Format {
@@ -55,7 +57,11 @@ public:
 		FORMAT_FLOAT = 4,
 	};
 	RID create(int sample_rate, int format, int frame_size);
+	void flush();
 	void destroy(RID dev);
+	void talk(RID devid);
+	void mute(RID devid);
+	bool recording() const;
 	SDL2AudioCapture();
 };
 class _SDL2AudioCapture : public Object {
@@ -69,6 +75,8 @@ public:
 	static _SDL2AudioCapture *get_singleton();
 	void _emit_pcm(PoolByteArray pcm);
 	void destroy(RID devid);
+	void talk(RID devid);
+	void mute(RID devid);
 	RID create(int sample_rate, int format, int frame_size);
 	_SDL2AudioCapture();
 	
