@@ -2,46 +2,79 @@
 #define SDL2_AUDIOCAPTURE_H
 
 #include "object.h"
+#include "rid.h"
 #include "variant.h"
-#include "core/os/thread.h"
-#include "core/os/mutex.h"
+#include "os/thread.h"
+#include "os/mutex.h"
 #include <SDL.h>
+
+class SDLDevice : public RID_Data {
+	RID self;
+
+private:
+	SDL_AudioDeviceID devid_in;
+	SDL_AudioSpec wanted;
+	int format;
+public:
+	int get_available_frames() const;
+	PoolByteArray get_frame();
+	void talk();
+	void mute();
+	bool recording();
+	SDLDevice(int sample_rate, int format, int frame_size);
+	~SDLDevice();
+};
+
 class SDL2AudioCapture : public Object {
 	GDCLASS(SDL2AudioCapture, Object);
     
 	static SDL2AudioCapture *singleton;
 	static void thread_func(void *p_udata);
-public:
-	static SDL2AudioCapture *get_singleton();
-
 private:
-	enum{
-		SAMPLE_RATE = 48000,
-		FRAME_SIZE = 960,
-	};
 	bool thread_exited;
 	mutable bool exit_thread;
 	Thread *thread;
 	Mutex *mutex;
-	SDL_AudioDeviceID devid_in;
-	SDL_AudioSpec wanted;
-	int get_available_frames() const;
+
+public:
+	static SDL2AudioCapture *get_singleton();
+	Error init();
+	void lock();
+	void unlock();
+	void finish();
+protected:
+	static void _bind_methods();
+
+private:
+	mutable RID_Owner<SDLDevice> mic_owner;
+
+public:
+	enum Format {
+		FORMAT_8_BIT = 1,
+		FORMAT_16_BIT = 2,
+		FORMAT_FLOAT = 4,
+	};
+	RID create(int sample_rate, int format, int frame_size);
+	void destroy(RID dev);
+	SDL2AudioCapture();
+};
+class _SDL2AudioCapture : public Object {
+	GDCLASS(_SDL2AudioCapture, Object);
+
+	static _SDL2AudioCapture *singleton;
+
 protected:
 	static void _bind_methods();
 public:
-	enum Format {
-		FORMAT_8_BIT,
-		FORMAT_16_BIT,
-	};
-	void set_singleton();
-	void lock();
-	void unlock();
-	void talk();
-	void mute();
-	bool recording();
-	void finish();
-	Error init();
-	SDL2AudioCapture();
+	static _SDL2AudioCapture *get_singleton();
+	void _emit_pcm(PoolByteArray pcm);
+	void destroy(RID devid);
+	RID create(int sample_rate, int format, int frame_size);
+	_SDL2AudioCapture();
+	
+
 };
+
 VARIANT_ENUM_CAST(SDL2AudioCapture::Format);
+
 #endif SDL2_AUDIOCAPTURE_H
