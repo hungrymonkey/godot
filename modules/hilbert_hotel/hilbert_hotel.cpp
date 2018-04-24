@@ -39,7 +39,7 @@ void HilbertHotel::register_rooms() {
 		auto bus = bus_owner.getornull(e->get());
 		if(bus){
 			uint64_t room = bus->next_room();
-			emit_signal("occupy_room", room, bus->get_id());
+			emit_signal("occupy_room", room, bus->get_self());
 		}	
 	}
 }
@@ -65,7 +65,6 @@ Variant HilbertHotel::get_bus_info(RID id){
 	return Variant();
 }
 void HilbertHotel::finish() {
-
 	if (!thread)
 		return;
 
