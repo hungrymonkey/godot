@@ -32,7 +32,7 @@ public:
 	_FORCE_INLINE_ RID get_self() const { return self; }
 
 	InfiniteBus(uint64_t prime) : prime_num(prime), num(1) {};
-	~InfiniteBus();
+	~InfiniteBus() {};
 };
 
 
@@ -64,11 +64,6 @@ private:
     
 public:
     RID create_bus();
-    void add(int value);
-    void reset();
-    int get_total() const;
-
-    Variant parse_dict() const;
     HilbertHotel();
 };
 
@@ -78,9 +73,12 @@ class _HilbertHotel : public Object {
     static _HilbertHotel *singleton;
 protected:
     static void _bind_methods();
+private:
+    void _occupy_room(int room_number, RID bus);
 public:
     RID create_bus();
-    _HilbertHotel *get_singleton();
+    static _HilbertHotel *get_singleton();
     _HilbertHotel();
+    ~_HilbertHotel();
 };
 #endif
