@@ -62,6 +62,7 @@ protected:
     static void _bind_methods();
 
 private:
+    uint64_t counter;
     RID_Owner<InfiniteBus> bus_owner;   
     
 public:

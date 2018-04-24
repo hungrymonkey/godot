@@ -15,9 +15,11 @@ void register_hilbert_hotel_types() {
         _hilbert_hotel = memnew(_HilbertHotel);
         ClassDB::register_class<_HilbertHotel>();
 	Engine::get_singleton()->add_singleton(Engine::Singleton("HilbertHotel", _HilbertHotel::get_singleton()));
+        HilbertHotel::get_singleton()->connect("occupy_room", _HilbertHotel::get_singleton(), "_occupy_room");
 }
 
 void unregister_hilbert_hotel_types() {
+        HilbertHotel::get_singleton()->disconnect("occupy_room", _HilbertHotel::get_singleton(), "_occupy_room");
         memdelete(hilbert_hotel);
         memdelete(_hilbert_hotel);
    //nothing to do here

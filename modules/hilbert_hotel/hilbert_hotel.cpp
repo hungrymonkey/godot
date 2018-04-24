@@ -2,10 +2,7 @@
 
 #include "hilbert_hotel.h"
 #include "prime_225.h"
-
-#include "print_string.h"
 #include "variant.h"
-#include "variant_parser.h"
 #include "ustring.h"
 #include "os/os.h"
 
@@ -26,6 +23,7 @@ void HilbertHotel::thread_func(void *p_udata){
 
 Error HilbertHotel::init(){
 	thread_exited = false;
+	counter = 0;
 	mutex = Mutex::create();
 	thread = Thread::create(HilbertHotel::thread_func, this);
 	return OK;
@@ -80,7 +78,7 @@ RID HilbertHotel::create_bus() {
 	//lock();
 	List<RID> list;
 	bus_owner.get_owned_list(&list);
-	InfiniteBus *ptr = memnew(InfiniteBus(list.size()));
+	InfiniteBus *ptr = memnew(InfiniteBus(PRIME[counter++]));
 	RID ret = bus_owner.make_rid(ptr);
 	ptr->set_self(ret);
 	//buses.insert(ptr);
@@ -104,7 +102,7 @@ void HilbertHotel::clear() {
 bool HilbertHotel::empty() {
 	List<RID> list;
 	bus_owner.get_owned_list(&list);
-	return list.size() > 0;
+	return list.size() <= 0;
 }
 void HilbertHotel::_bind_methods() {
 	ADD_SIGNAL(MethodInfo("occupy_room", PropertyInfo(Variant::INT, "room_number"), PropertyInfo(Variant::_RID, "r_id")));
@@ -135,8 +133,8 @@ void _HilbertHotel::_bind_methods() {
 }
 _HilbertHotel::_HilbertHotel() {
 	singleton = this;
-	HilbertHotel::get_singleton()->connect("occupy_room", this, "_occupy_room");
+	//HilbertHotel::get_singleton()->connect("occupy_room", this, "_occupy_room");
 }
 _HilbertHotel::~_HilbertHotel() {
-	HilbertHotel::get_singleton()->disconnect("occupy_room", this, "_occupy_room");
+	//HilbertHotel::get_singleton()->disconnect("occupy_room", this, "_occupy_room");
 }
