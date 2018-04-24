@@ -15,11 +15,11 @@ void HilbertHotel::thread_func(void *p_udata){
 
 	uint64_t msdelay = 1000;
 	while(!ac -> exit_thread){
-
-		
+		if(!ac -> empty()) {
 			ac->lock();
+			ac->register_rooms();
 			ac->unlock();
-		
+		}
 		OS::get_singleton()->delay_usec(msdelay * 1000);
 	}
 }
@@ -32,7 +32,17 @@ Error HilbertHotel::init(){
 }
 HilbertHotel *HilbertHotel::singleton = NULL;
 HilbertHotel *HilbertHotel::get_singleton() { return singleton; }
-
+void HilbertHotel::register_rooms() {
+	List<RID> list;
+	bus_owner.get_owned_list(&list);
+	for( List<RID>::Element *e = list.front(); e; e = e->next()) {
+		auto bus = bus_owner.getornull(e->get());
+		if(bus){
+			uint64_t room = bus->next_room();
+			emit_signal("occupy_room", room, bus->get_id());
+		}	
+	}
+}
 
 void HilbertHotel::unlock() {
 	if (!thread || !mutex)
@@ -44,7 +54,16 @@ void HilbertHotel::lock() {
 		return;
 	mutex->lock();
 }
-
+Variant HilbertHotel::get_bus_info(RID id){
+	InfiniteBus * bus = bus_owner.getornull(id);
+	if(bus){
+		Dictionary d;
+		d["prime"] = bus->get_bus_num();
+		d["current_room"] = bus->get_current_room();
+		return d;
+	}
+	return Variant();
+}
 void HilbertHotel::finish() {
 
 	if (!thread)
@@ -58,15 +77,36 @@ void HilbertHotel::finish() {
 		memdelete(mutex);
 	thread = NULL;
 }
-
 RID HilbertHotel::create_bus() {
-	InfiniteBus *ptr = memnew(InfiniteBus(buses.size()));
+	//lock();
+	List<RID> list;
+	bus_owner.get_owned_list(&list);
+	InfiniteBus *ptr = memnew(InfiniteBus(list.size()));
 	RID ret = bus_owner.make_rid(ptr);
 	ptr->set_self(ret);
-	buses.insert(ptr);
+	//buses.insert(ptr);
+	//unlock();
 	return ret;
 }
-
+bool HilbertHotel::delete_bus(RID id) {
+	if (bus_owner.owns(id)) {
+		bus_owner.free(id);
+		return true;
+	}
+	return false;
+}
+void HilbertHotel::clear() {
+	List<RID> list;
+	bus_owner.get_owned_list(&list);
+	for( List<RID>::Element *e = list.front(); e; e = e->next()) {
+		delete_bus(e->get());
+	}
+}
+bool HilbertHotel::empty() {
+	List<RID> list;
+	bus_owner.get_owned_list(&list);
+	return list.size() > 0;
+}
 void HilbertHotel::_bind_methods() {
 	ADD_SIGNAL(MethodInfo("occupy_room", PropertyInfo(Variant::INT, "room_number"), PropertyInfo(Variant::_RID, "r_id")));
 }
@@ -86,9 +126,11 @@ RID _HilbertHotel::create_bus() {
 void _HilbertHotel::_occupy_room(int room_number, RID bus){
 	emit_signal("occupy_room", room_number, bus);
 }
-
+Variant _HilbertHotel::get_bus_info(RID id) {
+	return HilbertHotel::get_singleton()->get_bus_info(id);
+}
 void _HilbertHotel::_bind_methods() {
-
+	ClassDB::bind_method(D_METHOD("get_bus_info", "r_id"), &_HilbertHotel::get_bus_info);
     ClassDB::bind_method(D_METHOD("create_bus"), &_HilbertHotel::create_bus);
 	ADD_SIGNAL(MethodInfo("occupy_room", PropertyInfo(Variant::INT, "room_number"), PropertyInfo(Variant::_RID, "r_id")));
 }

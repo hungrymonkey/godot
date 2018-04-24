@@ -7,7 +7,7 @@
 #include "variant.h"
 #include "reference.h"
 #include "vector.h"
-#include "variant_parser.h"
+#include "variant.h"
 #include "io/json.h"
 #include "os/thread.h"
 #include "os/mutex.h"
@@ -25,8 +25,11 @@ public:
 	uint64_t next_room() {
 		return prime_num * num++;
 	}
-    uint64_t get_bus_num() {
+    uint64_t get_bus_num() const {
         return prime_num;
+    }
+    uint64_t get_current_room() const {
+        return prime_num * num;
     }
     _FORCE_INLINE_ void set_self(const RID &p_self) { self = p_self; }
 	_FORCE_INLINE_ RID get_self() const { return self; }
@@ -59,11 +62,15 @@ protected:
     static void _bind_methods();
 
 private:
-    RID_Owner<InfiniteBus> bus_owner;
-    Set<InfiniteBus *> buses;
+    RID_Owner<InfiniteBus> bus_owner;   
     
 public:
     RID create_bus();
+    Variant get_bus_info(RID id);
+    bool empty();
+    bool delete_bus(RID id);
+    void clear();
+    void register_rooms();
     HilbertHotel();
 };
 
@@ -75,9 +82,11 @@ protected:
     static void _bind_methods();
 private:
     void _occupy_room(int room_number, RID bus);
+    
 public:
     RID create_bus();
     static _HilbertHotel *get_singleton();
+    Variant get_bus_info(RID id);
     _HilbertHotel();
     ~_HilbertHotel();
 };
