@@ -63,7 +63,8 @@ protected:
 
 private:
     uint64_t counter;
-    RID_Owner<InfiniteBus> bus_owner;   
+    RID_Owner<InfiniteBus> bus_owner;
+    void _emit_occupy_room(uint64_t room, RID rid);
     
 public:
     RID create_bus();
@@ -77,17 +78,23 @@ public:
 
 class _HilbertHotel : public Object {
     GDCLASS(_HilbertHotel, Object);
-
+    
+    friend class HilbertHotel;
     static _HilbertHotel *singleton;
+
 protected:
     static void _bind_methods();
+
 private:
     void _occupy_room(int room_number, RID bus);
     
 public:
     RID create_bus();
+    void connect_singals();
+    bool delete_bus(RID id);
     static _HilbertHotel *get_singleton();
     Variant get_bus_info(RID id);
+    
     _HilbertHotel();
     ~_HilbertHotel();
 };

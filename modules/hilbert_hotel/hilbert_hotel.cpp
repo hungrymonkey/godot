@@ -37,7 +37,7 @@ void HilbertHotel::register_rooms() {
 		auto bus = bus_owner.getornull(e->get());
 		if(bus){
 			uint64_t room = bus->next_room();
-			emit_signal("occupy_room", room, bus->get_self());
+			_emit_occupy_room(room, bus->get_self());
 		}	
 	}
 }
@@ -51,6 +51,9 @@ void HilbertHotel::lock() {
 	if (!thread || !mutex)
 		return;
 	mutex->lock();
+}
+void HilbertHotel::_emit_occupy_room(uint64_t room, RID rid) {
+	_HilbertHotel::get_singleton()->_occupy_room(room, rid);
 }
 Variant HilbertHotel::get_bus_info(RID id){
 	InfiniteBus * bus = bus_owner.getornull(id);
@@ -105,7 +108,6 @@ bool HilbertHotel::empty() {
 	return list.size() <= 0;
 }
 void HilbertHotel::_bind_methods() {
-	ADD_SIGNAL(MethodInfo("occupy_room", PropertyInfo(Variant::INT, "room_number"), PropertyInfo(Variant::_RID, "r_id")));
 }
 
 HilbertHotel::HilbertHotel() {
@@ -120,6 +122,9 @@ _HilbertHotel *_HilbertHotel::get_singleton() { return singleton; }
 RID _HilbertHotel::create_bus() {
 	return HilbertHotel::get_singleton()->create_bus();
 }
+bool _HilbertHotel::delete_bus(RID rid) {
+	return HilbertHotel::get_singleton()->delete_bus(rid);
+}
 void _HilbertHotel::_occupy_room(int room_number, RID bus){
 	emit_signal("occupy_room", room_number, bus);
 }
@@ -129,12 +134,16 @@ Variant _HilbertHotel::get_bus_info(RID id) {
 void _HilbertHotel::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_bus_info", "r_id"), &_HilbertHotel::get_bus_info);
     ClassDB::bind_method(D_METHOD("create_bus"), &_HilbertHotel::create_bus);
+	ClassDB::bind_method(D_METHOD("delete_bus"), &_HilbertHotel::delete_bus);
 	ADD_SIGNAL(MethodInfo("occupy_room", PropertyInfo(Variant::INT, "room_number"), PropertyInfo(Variant::_RID, "r_id")));
+}
+void _HilbertHotel::connect_singals() {
+	HilbertHotel::get_singleton()->connect("occupy_room", _HilbertHotel::get_singleton(), "_occupy_room");
 }
 _HilbertHotel::_HilbertHotel() {
 	singleton = this;
 	//HilbertHotel::get_singleton()->connect("occupy_room", this, "_occupy_room");
 }
 _HilbertHotel::~_HilbertHotel() {
-	//HilbertHotel::get_singleton()->disconnect("occupy_room", this, "_occupy_room");
+	HilbertHotel::get_singleton()->disconnect("occupy_room", this, "_occupy_room");
 }
