@@ -5,6 +5,7 @@
 #include "object.h"
 #include "list.h"
 #include "rid.h"
+#include "set.h"
 #include "variant.h"
 #include "os/thread.h"
 #include "os/mutex.h"
@@ -60,6 +61,8 @@ protected:
 private:
     uint64_t counter;
     RID_Owner<InfiniteBus> bus_owner;
+    //https://github.com/godotengine/godot/blob/master/core/rid.h#L196
+    Set<RID> buses;
     void _emit_occupy_room(uint64_t room, RID rid);
     
 public:

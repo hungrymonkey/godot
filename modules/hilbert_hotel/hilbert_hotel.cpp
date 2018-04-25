@@ -34,9 +34,7 @@ Error HilbertHotel::init(){
 HilbertHotel *HilbertHotel::singleton = NULL;
 HilbertHotel *HilbertHotel::get_singleton() { return singleton; }
 void HilbertHotel::register_rooms() {
-	List<RID> list;
-	bus_owner.get_owned_list(&list);
-	for( List<RID>::Element *e = list.front(); e; e = e->next()) {
+	for( Set<RID>::Element *e = buses.front(); e; e = e->next()) {
 		auto bus = bus_owner.getornull(e->get());
 		if(bus){
 			uint64_t room = bus->next_room();
@@ -81,34 +79,35 @@ void HilbertHotel::finish() {
 	thread = NULL;
 }
 RID HilbertHotel::create_bus() {
-	//lock();
+	lock();
 	InfiniteBus *ptr = memnew(InfiniteBus(PRIME[counter++]));
 	RID ret = bus_owner.make_rid(ptr);
 	ptr->set_self(ret);
-	//unlock();
+	buses.insert(ret);
+	unlock();
 	return ret;
 }
 //https://github.com/godotengine/godot/blob/master/core/rid.h#L187
 bool HilbertHotel::delete_bus(RID id) {
 	if (bus_owner.owns(id)) {
+		lock();
 		InfiniteBus *b = bus_owner.get(id);
 		bus_owner.free(id);
+		buses.erase(id);
 		memdelete(b);
+		unlock();
 		return true;
 	}
 	return false;
 }
 void HilbertHotel::clear() {
-	List<RID> list;
-	bus_owner.get_owned_list(&list);
-	for( List<RID>::Element *e = list.front(); e; e = e->next()) {
+	
+	for( Set<RID>::Element *e = buses.front(); e; e = e->next()) {
 		delete_bus(e->get());
 	}
 }
 bool HilbertHotel::empty() {
-	List<RID> list;
-	bus_owner.get_owned_list(&list);
-	return list.size() <= 0;
+	return buses.size() <= 0;
 }
 void HilbertHotel::_bind_methods() {
 }
