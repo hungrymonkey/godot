@@ -82,18 +82,18 @@ void HilbertHotel::finish() {
 }
 RID HilbertHotel::create_bus() {
 	//lock();
-	List<RID> list;
-	bus_owner.get_owned_list(&list);
 	InfiniteBus *ptr = memnew(InfiniteBus(PRIME[counter++]));
 	RID ret = bus_owner.make_rid(ptr);
 	ptr->set_self(ret);
-	//buses.insert(ptr);
 	//unlock();
 	return ret;
 }
+//https://github.com/godotengine/godot/blob/master/core/rid.h#L187
 bool HilbertHotel::delete_bus(RID id) {
 	if (bus_owner.owns(id)) {
+		InfiniteBus *b = bus_owner.get(id);
 		bus_owner.free(id);
+		memdelete(b);
 		return true;
 	}
 	return false;
