@@ -3,6 +3,7 @@
 #include "hilbert_hotel.h"
 #include "variant.h"
 #include "os/os.h"
+#include "list.h"
 #include "dictionary.h"
 #include "prime_225.h"
 

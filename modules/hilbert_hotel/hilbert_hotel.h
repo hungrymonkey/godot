@@ -4,8 +4,7 @@
 
 #include "object.h"
 #include "list.h"
-#include "reference.h"
-#include "vector.h"
+#include "rid.h"
 #include "variant.h"
 #include "os/thread.h"
 #include "os/mutex.h"
