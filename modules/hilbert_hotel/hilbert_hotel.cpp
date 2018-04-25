@@ -142,8 +142,6 @@ void _HilbertHotel::connect_singals() {
 }
 _HilbertHotel::_HilbertHotel() {
 	singleton = this;
-	//HilbertHotel::get_singleton()->connect("occupy_room", this, "_occupy_room");
 }
 _HilbertHotel::~_HilbertHotel() {
-	HilbertHotel::get_singleton()->disconnect("occupy_room", this, "_occupy_room");
 }
