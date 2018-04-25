@@ -18,8 +18,13 @@ void register_hilbert_hotel_types() {
 }
 
 void unregister_hilbert_hotel_types() {
-        memdelete(hilbert_hotel);
-        memdelete(_hilbert_hotel);
+        if(hilbert_hotel){
+                hilbert_hotel->finish();
+                memdelete(hilbert_hotel);
+        }
+        if(_hilbert_hotel) {
+                memdelete(_hilbert_hotel);
+        }
    //nothing to do here
 }
 
