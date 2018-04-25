@@ -1,10 +1,12 @@
 /* summator.cpp */
 
 #include "hilbert_hotel.h"
-#include "prime_225.h"
 #include "variant.h"
-#include "ustring.h"
 #include "os/os.h"
+#include "dictionary.h"
+#include "prime_225.h"
+
+
 
 
 void HilbertHotel::thread_func(void *p_udata){
