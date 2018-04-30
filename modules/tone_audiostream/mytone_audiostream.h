@@ -33,6 +33,7 @@ public:
 	virtual void mix(AudioFrame *p_buffer, float p_rate_scale, int p_frames);
 	virtual float get_length() const; //if supported, otherwise return 0
 	AudioStreamPlaybackMyTone();
+	~AudioStreamPlaybackMyTone();
 
 };
 

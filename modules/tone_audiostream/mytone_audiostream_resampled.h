@@ -35,6 +35,7 @@ public:
 	virtual float get_length() const; //if supported, otherwise return 0
 	virtual float get_stream_sampling_rate();
 	AudioStreamPlaybackResampledMyTone();
+	~AudioStreamPlaybackResampledMyTone();
 
 };
 

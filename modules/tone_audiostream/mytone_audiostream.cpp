@@ -9,6 +9,12 @@ AudioStreamPlaybackMyTone::AudioStreamPlaybackMyTone()
         zeromem(pcm_buffer, PCM_BUFFER_SIZE);
         AudioServer::get_singleton()->unlock();
 }
+AudioStreamPlaybackMyTone::~AudioStreamPlaybackMyTone() {
+	if(pcm_buffer){
+		AudioServer::get_singleton()->audio_data_free(pcm_buffer);
+		pcm_buffer = NULL;
+	}
+}
 void AudioStreamPlaybackMyTone::stop(){
 	active = false;
 	base->reset();
