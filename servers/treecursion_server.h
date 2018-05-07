@@ -7,6 +7,8 @@
 
 class TreecursionServer : public Object {
 	GDCLASS(TreecursionServer, Object);
+
+	static TreecursionServer *singleton;
 protected:
 	static void _bind_methods();
 

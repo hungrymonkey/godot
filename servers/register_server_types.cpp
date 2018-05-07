@@ -60,6 +60,9 @@
 #include "visual/shader_types.h"
 #include "visual_server.h"
 
+//added
+#include "treecursion_server.h"
+
 static void _debugger_get_resource_usage(List<ScriptDebuggerRemote::ResourceUsage> *r_usage) {
 
 	List<VS::TextureInfo> tinfo;
@@ -179,4 +182,6 @@ void register_server_singletons() {
 	Engine::get_singleton()->add_singleton(Engine::Singleton("PhysicsServer", PhysicsServer::get_singleton()));
 	Engine::get_singleton()->add_singleton(Engine::Singleton("Physics2DServer", Physics2DServer::get_singleton()));
 	Engine::get_singleton()->add_singleton(Engine::Singleton("ARVRServer", ARVRServer::get_singleton()));
+	//added
+	Engine::get_singleton()->add_singleton(Engine::Singleton("TreecursionServer", TreecursionServer::get_singleton()));
 }
