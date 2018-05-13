@@ -169,6 +169,11 @@ void register_server_types() {
 
 	PhysicsServerManager::register_server("GodotPhysics - deprecated", &_createGodotPhysicsCallback);
 	PhysicsServerManager::set_default_server("GodotPhysics - deprecated");
+
+	//aded treecursion
+	GLOBAL_DEF(TreecursionServerManager::setting_property_name, "DEFAULT");
+	ProjectSettings::get_singleton()->set_custom_property_info(TreecursionServerManager::setting_property_name, PropertyInfo(Variant::STRING, TreecursionServerManager::setting_property_name, PROPERTY_HINT_ENUM, "DEFAULT"));
+
 }
 
 void unregister_server_types() {

@@ -3,6 +3,7 @@
 
 
 #include "object.h"
+#include "ustring.h"
 #include  "io/treecursion_types.h"
 
 class TreecursionServer : public Object {
