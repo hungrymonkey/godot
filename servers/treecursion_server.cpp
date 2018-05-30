@@ -8,6 +8,16 @@ TreecursionServer *TreecursionServer::get_singleton() {
 	return singleton;
 }
 
+void TreecursionServer::enqueue(TreecursionWriteTask * task){
+	for(int i = 0; i < TreecursionServerManager::get_servers_count(); i++){
+		TreecursionServerManager::get_saver(i)->enqueue(task);
+	}
+}
+TreecursionSaver *TreecursionServerManager::get_saver(int p_saver){
+	ERR_FAIL_INDEX_V(p_saver, get_servers_count(), NULL);
+	//return treecursion_servers[p_saver];
+	return NULL;
+}
 
 Vector<TreecursionServerManager::ClassInfo> TreecursionServerManager::treecursion_servers;
 const String TreecursionServerManager::setting_property_name("io/treecursion_engine");
@@ -39,9 +49,9 @@ int TreecursionServerManager::find_server_id(const String &p_name) {
 		}
 	}
 	return -1;
-}
+}	
 
-void TreecursionServerManager::register_server(const String &p_name, CreateTreecursionServerCallback p_creat_callback) {
+void TreecursionServerManager::register_server(const String &p_name, CreateTreecursionSaverCallback p_creat_callback) {
 	ERR_FAIL_COND(!p_creat_callback);
 	ERR_FAIL_COND(find_server_id(p_name) != -1);
 	treecursion_servers.push_back(ClassInfo(p_name, p_creat_callback));

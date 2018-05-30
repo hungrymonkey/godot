@@ -6,32 +6,34 @@
 #include "ustring.h"
 #include  "io/treecursion_types.h"
 
-class TreecursionServer : public Object {
-	GDCLASS(TreecursionServer, Object);
+class TreecursionSaver : public Object {
+	GDCLASS(TreecursionSaver, Object);
 
-	static TreecursionServer *singleton;
+	static TreecursionSaver *singleton;
 protected:
 	static void _bind_methods();
 
 public:
-	static TreecursionServer *get_singleton();
+	static TreecursionSaver *get_singleton();
 	virtual void flush() = 0;
 	virtual void enqueue(TreecursionWriteTask * task) = 0;
 };
 
-typedef TreecursionServer *(*CreateTreecursionServerCallback)();
+
+
+typedef TreecursionSaver *(*CreateTreecursionSaverCallback)();
 
 
 class TreecursionServerManager {
 	struct ClassInfo {
 		String name;
-		CreateTreecursionServerCallback create_callback;
+		CreateTreecursionSaverCallback create_callback;
 
 		ClassInfo() :
 				name(""),
 				create_callback(NULL) {}
 
-		ClassInfo(String p_name, CreateTreecursionServerCallback p_create_callback) :
+		ClassInfo(String p_name, CreateTreecursionSaverCallback p_create_callback) :
 				name(p_name),
 				create_callback(p_create_callback) {}
 
@@ -51,13 +53,26 @@ private:
 	static void on_servers_changed();
 
 public:
-	static void register_server(const String &p_name, CreateTreecursionServerCallback p_creat_callback);
+	static void register_server(const String &p_name, CreateTreecursionSaverCallback p_creat_callback);
 	static void set_default_server(const String &p_name, int p_priority = 0);
 	static int find_server_id(const String &p_name);
 	static int get_servers_count();
+	static TreecursionSaver *get_saver(int p_driver);
 	static String get_server_name(int p_id);
-	static TreecursionServer *new_default_server();
-	static TreecursionServer *new_server(const String &p_name);
+	static TreecursionSaver *new_server(const String &p_name);
 };
 
+class TreecursionServer : public Object {
+	GDCLASS(TreecursionServer, Object);
+
+	//friend class TreecursionServerManager;
+
+	static TreecursionServer *singleton;
+protected:
+	static void _bind_methods();
+
+public:
+	static TreecursionServer *get_singleton();
+	void enqueue(TreecursionWriteTask * task);
+};
 #endif
