@@ -16,6 +16,7 @@
 
 #include "treecursion_queue_lockless.h"
 #include "io/treecursion_types.h"
+#include "servers/treecursion_server.h"
 //#include <opus.h>
 //#include <opus_multistream.h>
 
@@ -69,7 +70,11 @@ private:
 		FINISHED,
 		ERROR
 	};
-
+	/*
+	 *
+	 *  GDSCript may change the variable
+	 */
+	//volatile enum recording_state _recording_state;
 	enum recording_state _recording_state;
 
 	//OpusMSEncoder *_opusEncoder;

@@ -17,6 +17,7 @@ public:
 	static TreecursionSaver *get_singleton();
 	virtual void flush() = 0;
 	virtual void enqueue(TreecursionWriteTask * task) = 0;
+	virtual bool is_paused() = 0;
 };
 
 

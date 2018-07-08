@@ -15,6 +15,11 @@ static _TalkingTreeStorage *_talking_tree_storage = NULL;
 static TreecursionPlayer *treecursion_player = NULL;
 static _TreecursionPlayer *_treecursion_player = NULL;
 
+/*
+TreecursionSaver _createTreecursionServer(){
+	return memnew(TalkingTreeStorage);
+}*/
+
 void register_talkingtree_storage_types(){
 	//loader
 	talkingtree_storage_loader = memnew(ResourceFormatTalkingTreeStorage);

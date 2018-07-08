@@ -10,7 +10,8 @@ TreecursionServer *TreecursionServer::get_singleton() {
 
 void TreecursionServer::enqueue(TreecursionWriteTask * task){
 	for(int i = 0; i < TreecursionServerManager::get_servers_count(); i++){
-		TreecursionServerManager::get_saver(i)->enqueue(task);
+		if(!TreecursionServerManager::get_saver(i)->is_paused())
+			TreecursionServerManager::get_saver(i)->enqueue(task);
 	}
 }
 TreecursionSaver *TreecursionServerManager::get_saver(int p_saver){
