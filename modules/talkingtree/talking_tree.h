@@ -2,7 +2,10 @@
 #ifndef TALKING_TREE_H
 #define TALKING_TREE_H
 
-#include "reference.h"
+#include "object.h"
+#include "core/os/thread.h"
+#include "core/os/mutex.h"
+
 #include "io/networked_multiplayer_peer.h"
 #include "ustring.h"
 #include "talking_tree_enum.h"
@@ -12,11 +15,27 @@
 #include <opus.h>
 #include <google/protobuf/message.h>
 
-class TalkingTree : public Reference {
-	GDCLASS(TalkingTree, Reference);
+class TalkingTree : public Object {
+	GDCLASS(TalkingTree, Object);
 
 protected:
 	static void _bind_methods();
+
+	static TalkingTree *singleton;
+	static void thread_func(void *p_udata);
+	
+public:
+	static TalkingTree *get_singleton();
+	void lock();
+	void unlock();
+	void finish();
+	Error init();
+
+private:
+	bool thread_exited;
+	mutable bool exit_thread;
+	Thread *thread;
+	Mutex *mutex;
 
 public:
 	TalkingTree();
@@ -69,6 +88,22 @@ private:
 	int _encode_audio_frame(int target, PoolVector<uint8_t> &pcm);
 	void _process_audio_packet(int p_from, const uint8_t *p_packet, int p_packet_len);
 	Pair<int, bool> _decode_opus_frame(const uint8_t *in_buf, int in_len, int16_t *pcm_buf, int buf_len);
+};
+
+class _TalkingTree : public Object {
+	GDCLASS(_TalkingTree, Object);
+
+	friend class TalkingTree;
+
+	static _TalkingTree *singleton;
+protected:
+	
+	static void _bind_methods();
+	
+public:
+	static _TalkingTree *get_singleton() { return singleton; }
+	_TalkingTree();
+	~_TalkingTree();
 };
 
 #endif

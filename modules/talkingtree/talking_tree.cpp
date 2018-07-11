@@ -14,6 +14,47 @@
 
 //#include "modules/talkingtree_storage/talking_tree_storage.h"
 
+TalkingTree *TalkingTree::singleton = nullptr;
+
+void TalkingTree::lock() {
+	if (!thread || !mutex)
+		return;
+	mutex->lock();
+}
+void TalkingTree::unlock() {
+	if (!thread || !mutex)
+		return;
+	mutex->unlock();
+}
+
+Error TalkingTree::init(){
+	thread_exited = false;
+	mutex = Mutex::create();
+	thread = Thread::create(TalkingTree::thread_func, this);
+	return OK;
+}
+void TalkingTree::finish() {
+	if (!thread)
+		return;
+	exit_thread = true;
+	Thread::wait_to_finish(thread);
+
+	memdelete(thread);
+	if (mutex)
+		memdelete(mutex);
+	thread = NULL;
+}
+
+void TalkingTree::thread_func(void *p_udata){
+	TalkingTree *ac = (TalkingTree *) p_udata;
+
+	uint64_t usdelay = 50000;
+	while(!ac -> exit_thread){
+
+		OS::get_singleton()->delay_usec(usdelay);
+	}
+}
+
 void TalkingTree::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_network_peer", "peer"), &TalkingTree::set_network_peer);
 	ClassDB::bind_method(D_METHOD("set_game_network_peer", "peer"), &TalkingTree::set_game_network_peer);
@@ -373,3 +414,17 @@ int TalkingTree::_encode_audio_frame(int target, PoolVector<uint8_t> &pcm){
 	network_peer->put_packet(audiobuf.ptr(), audiobuf.size());
 	return audiobuf.size();
 }
+
+_TalkingTree *_TalkingTree::singleton = nullptr;
+
+void _TalkingTree::_bind_methods() {
+
+}
+
+_TalkingTree::_TalkingTree() {
+	singleton = this;	
+}
+_TalkingTree::~_TalkingTree() {
+	singleton = nullptr;
+}
+
