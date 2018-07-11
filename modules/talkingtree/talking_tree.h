@@ -6,7 +6,7 @@
 #include "core/os/thread.h"
 #include "core/os/mutex.h"
 
-#include "io/networked_multiplayer_peer.h"
+#include "io/multiplayer_api.h"
 #include "ustring.h"
 #include "talking_tree_enum.h"
 #include "scene/main/timer.h"
@@ -18,12 +18,12 @@
 class TalkingTree : public Object {
 	GDCLASS(TalkingTree, Object);
 
+	static TalkingTree *singleton;
+	static void thread_func(void *p_udata);
+
 protected:
 	static void _bind_methods();
 
-	static TalkingTree *singleton;
-	static void thread_func(void *p_udata);
-	
 public:
 	static TalkingTree *get_singleton();
 	void lock();
@@ -57,8 +57,7 @@ public:
 	
 private:
 	int last_send_cache_id;
-	Ref<NetworkedMultiplayerPeer> network_peer;
-	Ref<NetworkedMultiplayerPeer> game_peer;
+	Ref<MultiplayerAPI> multiplayer;
 	void _send_user_info(int p_to);
 	void _send_packet(int p_to, PacketType type, google::protobuf::Message &message, NetworkedMultiplayerPeer::TransferMode transfer);
 	void _network_process_packet(int p_from, const uint8_t *p_packet, int p_packet_len);
