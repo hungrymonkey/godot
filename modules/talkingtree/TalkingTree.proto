@@ -1,0 +1,43 @@
+syntax = "proto2";
+package TalkingTreeProto;
+
+option optimize_for = SPEED;
+
+
+message Version {
+	// 2-byte Major, 1-byte Minor and 1-byte Patch version number.
+	optional uint32 version = 1;
+	// Client release name.
+	optional string release = 2;
+	// Client OS name.
+	optional string os = 3;
+	// Client OS version.
+	optional string os_version = 4;
+}
+
+
+// Used to send and broadcast text messages.
+message TextMessage {
+	// The message sender, identified by its session.
+	optional uint32 actor = 1;
+	// Target users for the message, identified by their session.
+	repeated uint32 session = 2;
+	// The channels to which the message is sent, identified by their
+	// channel_ids.
+	repeated uint32 channel_id = 3;
+	// The root channels when sending message recursively to several channels,
+	// identified by their channel_ids.
+	repeated uint32 tree_id = 4;
+	// The UTF-8 encoded message. May be HTML if the server allows.
+	required string message = 5;
+}
+
+message UDPTunnel {
+	// Not used.
+	required bytes packet = 1;
+}
+
+message UserInfo {
+	optional uint32 user_id = 1;
+	optional uint32 tree_id = 2;
+}
