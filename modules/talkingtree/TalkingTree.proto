@@ -27,9 +27,8 @@ message TextMessage {
 	repeated uint32 channel_id = 3;
 	// The root channels when sending message recursively to several channels,
 	// identified by their channel_ids.
-	repeated uint32 tree_id = 4;
 	// The UTF-8 encoded message. May be HTML if the server allows.
-	required string message = 5;
+	required string message = 4;
 }
 
 message UDPTunnel {

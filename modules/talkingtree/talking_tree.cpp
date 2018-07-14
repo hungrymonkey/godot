@@ -57,7 +57,6 @@ void TalkingTree::thread_func(void *p_udata){
 
 void TalkingTree::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_network_peer", "peer"), &TalkingTree::set_network_peer);
-	ClassDB::bind_method(D_METHOD("set_game_network_peer", "peer"), &TalkingTree::set_game_network_peer);
 	ClassDB::bind_method(D_METHOD("is_network_server"), &TalkingTree::is_network_server);
 	ClassDB::bind_method(D_METHOD("has_network_peer"), &TalkingTree::has_network_peer);
 	ClassDB::bind_method(D_METHOD("get_network_connected_peers"), &TalkingTree::get_network_connected_peers);
@@ -82,7 +81,6 @@ void TalkingTree::_bind_methods() {
 	//VOIP
 	ClassDB::bind_method(D_METHOD("_create_audio_frame", "audio_frame"), &TalkingTree::_create_audio_frame);
 
-	ClassDB::bind_method(D_METHOD("get_audio_stream_peer", "p_id"), &TalkingTree::get_audio_stream_peer);
 	ClassDB::bind_method(D_METHOD("talk"), &TalkingTree::talk);
 	ClassDB::bind_method(D_METHOD("mute"), &TalkingTree::mute);
 }
@@ -138,10 +136,7 @@ void TalkingTree::_send_user_info(int p_to){
 	}
 }
 
-Ref<AudioStreamTalkingTree> TalkingTree::get_audio_stream_peer(int pid) {
-	const int talkingtree_id = connected_peers.getForward(pid);
-	return connected_audio_stream_peers.get(talkingtree_id);
-}
+
 void TalkingTree::_create_audio_peer_stream(int p_id){
 	connected_audio_stream_peers[p_id].instance();
 	connected_audio_stream_peers[p_id]->set_pid(p_id);
@@ -191,14 +186,12 @@ void TalkingTree::_network_process_packet(int p_from, const uint8_t *p_packet, i
 				while((k=connected_peers.next(k))){
 					TalkingTreeProto::UserInfo otherUsr;
 					otherUsr.set_user_id(*k);
-					otherUsr.set_tree_id(connected_peers.getForward(*k));
 					_send_packet(p_from, PacketType::USERINFO, otherUsr, NetworkedMultiplayerPeer::TRANSFER_MODE_RELIABLE);
 					
 				}
 				//send yourself
 				_send_user_info(p_from);
 			}
-			connected_peers.add(game_id, tree_id);
 			
 		}
 		default:
@@ -216,28 +209,24 @@ bool TalkingTree::has_network_peer() const {
 	return multiplayer->has_network_peer();
 }
 
-void TalkingTree::set_network_peer(const Ref<NetworkedMultiplayerPeer> &p_network_peer) {
+void TalkingTree::set_network_peer(const Ref<MultiplayerAPI> &p_multiplayer) {
 	if (multiplayer->has_network_peer()) {
-		network_peer->disconnect("peer_connected", this, "_network_peer_connected");
-		network_peer->disconnect("peer_disconnected", this, "_network_peer_disconnected");
-		network_peer->disconnect("connection_succeeded", this, "_connected_to_server");
-		network_peer->disconnect("connection_failed", this, "_connection_failed");
-		network_peer->disconnect("server_disconnected", this, "_server_disconnected");
+		multiplayer->disconnect("network_peer_connected", this, "_network_peer_connected");
+		multiplayer->disconnect("network_peer_packet", this, "_queue_network_packet");
+		multiplayer->disconnect("server_disconnected", this, "_server_disconnected");
 		connected_audio_stream_peers.clear();
-		connected_peers.clear();
 		last_send_cache_id = 1;
 		SDL2AudioCapture::get_singleton()->disconnect("get_pcm", this, "_create_audio_frame");
 	}
 
 	ERR_EXPLAIN("Supplied NetworkedNetworkPeer must be connecting or connected.");
-	ERR_FAIL_COND(p_network_peer.is_valid() && p_network_peer->get_connection_status() == NetworkedMultiplayerPeer::CONNECTION_DISCONNECTED);
-	network_peer = p_network_peer;
-	if (network_peer.is_valid()) {
-		network_peer->connect("peer_connected", this, "_network_peer_connected");
-		network_peer->connect("peer_disconnected", this, "_network_peer_disconnected");
-		network_peer->connect("connection_succeeded", this, "_connected_to_server");
-		network_peer->connect("connection_failed", this, "_connection_failed");
-		network_peer->connect("server_disconnected", this, "_server_disconnected");
+	ERR_FAIL_COND(p_multiplayer.is_valid() && p_multiplayer->get_network_peer()->get_connection_status() == NetworkedMultiplayerPeer::CONNECTION_DISCONNECTED);
+	multiplayer = p_multiplayer;
+	if (multiplayer.is_valid()) {
+		multiplayer->connect("network_peer_connected", this, "_network_peer_connected");
+		multiplayer->connect("network_peer_packet", this, "_queue_network_packet");
+		multiplayer->connect("connection_succeeded", this, "_connected_to_server");
+		multiplayer->connect("server_disconnected", this, "_server_disconnected");
 		SDL2AudioCapture::get_singleton()->connect("get_pcm", this, "_create_audio_frame");
 	}
 }
@@ -252,7 +241,6 @@ void TalkingTree::_network_peer_connected(int p_id) {
 }
 void TalkingTree::_network_peer_disconnected(int p_id) {
 	connected_audio_stream_peers.erase(p_id);
-	connected_peers.eraseData(p_id);
 	emit_signal("network_peer_disconnected", p_id);
 }
 void TalkingTree::_server_disconnected(){
@@ -260,27 +248,22 @@ void TalkingTree::_server_disconnected(){
 	emit_signal("server_disconnected");
 }
 int TalkingTree::get_network_unique_id() const {
-	ERR_FAIL_COND_V(!network_peer.is_valid(), 0);
-	return network_peer->get_unique_id();
+	ERR_FAIL_COND_V(!multiplayer.is_valid(), 0);
+	return multiplayer->get_network_unique_id();
 }
 Vector<int> TalkingTree::get_network_connected_peers() const {
-	ERR_FAIL_COND_V(!network_peer.is_valid(), Vector<int>());
-	Vector<int> ret;
-	const int *k=NULL;
-	while( (k=connected_audio_stream_peers.next(k)) ) {
-		ret.push_back(*k);
-	}
-	return ret;
+	ERR_FAIL_COND_V(!multiplayer.is_valid(), Vector<int>());	
+	return multiplayer->get_network_connected_peers();
 }
 
 void TalkingTree::_network_poll() {
 	
-	if (!multiplayer.is_valid() || multiplayer->get_connection_status() == NetworkedMultiplayerPeer::CONNECTION_DISCONNECTED)
+	if (!multiplayer.is_valid() || multiplayer->get_network_peer()-> get_connection_status() == NetworkedMultiplayerPeer::CONNECTION_DISCONNECTED)
 		return;
 
 	network_peer->poll();
 
-	if (!network_peer.is_valid()) //it's possible that polling might have resulted in a disconnection, so check here
+	if (!multiplayer.is_valid()) //it's possible that polling might have resulted in a disconnection, so check here
 		return;
 
 	while (network_peer->get_available_packet_count()) {
@@ -296,7 +279,7 @@ void TalkingTree::_network_poll() {
 
 		_network_process_packet(sender, packet, len);
 
-		if (!network_peer.is_valid()) {
+		if (!multiplayer.is_valid()) {
 			break; //it's also possible that a packet or RPC caused a disconnection, so also check here
 		}
 	}

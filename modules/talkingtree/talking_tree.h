@@ -40,8 +40,7 @@ private:
 public:
 	TalkingTree();
 	~TalkingTree();
-	void set_network_peer(const Ref<NetworkedMultiplayerPeer> &p_network_peer);
-	void set_game_network_peer(const Ref<NetworkedMultiplayerPeer> &p_network_peer);
+	void set_network_peer(const Ref<MultiplayerAPI> &p_network_peer);
 	Vector<int> get_network_connected_peers() const;
 	bool is_network_server() const;
 	bool has_network_peer() const;
@@ -51,7 +50,6 @@ public:
 	//VOIP
 	void talk();
 	void mute();
-	Ref<AudioStreamTalkingTree> get_audio_stream_peer(int pid);
 	//Text
 	void send_text(String msg);
 	
@@ -82,7 +80,6 @@ private:
 	void reset_encoder();
 	//audiostream
     HashMap<int, Ref<AudioStreamTalkingTree>> connected_audio_stream_peers;
-	BiMap<int, int> connected_peers; /* game_id : talkingtree_id */
 	void _create_audio_frame(PoolVector<uint8_t> pcm);
 	int _encode_audio_frame(int target, PoolVector<uint8_t> &pcm);
 	void _process_audio_packet(int p_from, const uint8_t *p_packet, int p_packet_len);
