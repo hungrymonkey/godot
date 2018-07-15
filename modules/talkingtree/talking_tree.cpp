@@ -50,7 +50,7 @@ void TalkingTree::thread_func(void *p_udata){
 
 	uint64_t usdelay = 20000;
 	while(!ac -> exit_thread){
-
+		ac->poll();
 		OS::get_singleton()->delay_usec(usdelay);
 	}
 }
@@ -183,9 +183,10 @@ void TalkingTree::_network_process_packet(int p_from, const uint8_t *p_packet, i
 			if(multiplayer->is_network_server()){
 				//send everybody else
 				const int *k=NULL;
-				while((k=connected_peers.next(k))){
+				Vector<int> peers = get_network_connected_peers();
+				for(int i = 0; peers.size(); i++) {
 					TalkingTreeProto::UserInfo otherUsr;
-					otherUsr.set_user_id(*k);
+					otherUsr.set_user_id(peers[i]);
 					_send_packet(p_from, PacketType::USERINFO, otherUsr, NetworkedMultiplayerPeer::TRANSFER_MODE_RELIABLE);
 					
 				}
@@ -256,41 +257,26 @@ Vector<int> TalkingTree::get_network_connected_peers() const {
 	return multiplayer->get_network_connected_peers();
 }
 
-void TalkingTree::_network_poll() {
-	
+void TalkingTree::_poll_queue() {
 	if (!multiplayer.is_valid() || multiplayer->get_network_peer()-> get_connection_status() == NetworkedMultiplayerPeer::CONNECTION_DISCONNECTED)
 		return;
 
-	network_peer->poll();
-
-	if (!multiplayer.is_valid()) //it's possible that polling might have resulted in a disconnection, so check here
-		return;
-
-	while (network_peer->get_available_packet_count()) {
-
-		int sender = network_peer->get_packet_peer();
-		const uint8_t *packet;
-		int len;
-
-		Error err = network_peer->get_packet(&packet, len);
-		if (err != OK) {
-			ERR_PRINT("Error getting packet!");
-		}
-
-		_network_process_packet(sender, packet, len);
-
-		if (!multiplayer.is_valid()) {
-			break; //it's also possible that a packet or RPC caused a disconnection, so also check here
-		}
+	while(queue.size() > 0){
+		Packet tmp = queue.front()->get();
+		auto d = &tmp.data;
+		_network_process_packet( tmp.p_from, d->read().ptr(), d->size() );
+		queue.pop_front();
 	}
 }
 
+void TalkingTree::_queue_network_packet( int from, const PoolVector<uint8_t> &data) {
+	Packet p;
+	p.p_from = from;
+	p.data = data;
+	queue.push_back(p);
+}
 void TalkingTree::poll(){
-	while(true){
-		//_timer->set_wait_time(500.0/1000.0);
-		_network_poll();
-		//_timer->start();
-	}
+	_poll_queue();
 }
 void TalkingTree::mute(){
 	SDL2AudioCapture::get_singleton()->mute();

@@ -54,12 +54,18 @@ public:
 	void send_text(String msg);
 	
 private:
+	struct Packet {
+		int p_from;
+		PoolVector<uint8_t> data;
+	};
+	List<Packet> queue;
 	int last_send_cache_id;
 	Ref<MultiplayerAPI> multiplayer;
 	void _send_user_info(int p_to);
 	void _send_packet(int p_to, PacketType type, google::protobuf::Message &message, NetworkedMultiplayerPeer::TransferMode transfer);
 	void _network_process_packet(int p_from, const uint8_t *p_packet, int p_packet_len);
-	void _network_poll();
+	void _poll_queue();
+	void _queue_network_packet(int p_from, const PoolVector<uint8_t> &data);
 	void _network_peer_connected(int p_id);
 	void _network_peer_disconnected(int p_id);
 	void _connected_to_server();
