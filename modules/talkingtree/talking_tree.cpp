@@ -62,7 +62,6 @@ void TalkingTree::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_network_connected_peers"), &TalkingTree::get_network_connected_peers);
 	ClassDB::bind_method(D_METHOD("get_network_unique_id"), &TalkingTree::get_network_unique_id);
 	ClassDB::bind_method(D_METHOD("send_user_info"), &TalkingTree::send_user_info);
-	ClassDB::bind_method(D_METHOD("poll"), &TalkingTree::poll);
 	
 	ClassDB::bind_method(D_METHOD("_network_peer_connected"), &TalkingTree::_network_peer_connected);
 	ClassDB::bind_method(D_METHOD("_network_peer_disconnected"), &TalkingTree::_network_peer_disconnected);
@@ -81,8 +80,6 @@ void TalkingTree::_bind_methods() {
 	//VOIP
 	ClassDB::bind_method(D_METHOD("_create_audio_frame", "audio_frame"), &TalkingTree::_create_audio_frame);
 
-	ClassDB::bind_method(D_METHOD("talk"), &TalkingTree::talk);
-	ClassDB::bind_method(D_METHOD("mute"), &TalkingTree::mute);
 }
 
 TalkingTree::TalkingTree() : last_sent_audio_timestamp(0){
@@ -332,8 +329,13 @@ void TalkingTree::_process_audio_packet(int p_from, const uint8_t *p_packet, int
 			return;
 	}
 	//TalkingTreeStorage::get_singleton()->enqueue(vt);
-	connected_audio_stream_peers[p_from]->append_data((uint8_t *) pcm_buf, sizeof(int16_t) * out_len.first);
-	this->emit_signal("audio_message", p_from);
+	//connected_audio_stream_peers[p_from]->append_data((uint8_t *) pcm_buf, sizeof(int16_t) * out_len.first);
+	//this->emit_signal("audio_message", p_from);
+
+	PoolByteArray ret;
+	ret.resize(sizeof(int16_t) * out_len.first);
+	copymem( ret.write().ptr(), pcm_buf, sizeof(int16_t) * out_len.first);
+	_TalkingTree::get_singleton()->audio_message_signal(ret, p_from);
 }
 
 void TalkingTree::_create_audio_frame(PoolVector<uint8_t> pcm){
@@ -381,7 +383,26 @@ int TalkingTree::_encode_audio_frame(int target, PoolVector<uint8_t> &pcm){
 _TalkingTree *_TalkingTree::singleton = nullptr;
 
 void _TalkingTree::_bind_methods() {
+	ClassDB::bind_method(D_METHOD("send_text", "message"), &_TalkingTree::send_text);
 
+	ClassDB::bind_method(D_METHOD("talk"), &_TalkingTree::talk);
+	ClassDB::bind_method(D_METHOD("mute"), &_TalkingTree::mute);
+
+	ADD_SIGNAL(MethodInfo("text_message", PropertyInfo(Variant::STRING, "message"), PropertyInfo(Variant::INT, "sender_id")));
+	ADD_SIGNAL(MethodInfo("audio_message", PropertyInfo(Variant::POOL_BYTE_ARRAY, "message"), PropertyInfo(Variant::INT, "sender_id")));
+}
+void _TalkingTree::send_text(String msg){
+	TalkingTree::get_singleton()->send_text(msg);
+}
+void _TalkingTree::mute(){
+	SDL2AudioCapture::get_singleton()->mute();
+}
+
+void _TalkingTree::talk(){
+	SDL2AudioCapture::get_singleton()->talk();
+}
+void _TalkingTree::audio_message_signal( const PoolByteArray &data, int p_from){
+	emit_signal("audio_message", data, p_from);
 }
 
 _TalkingTree::_TalkingTree() {
@@ -390,4 +411,3 @@ _TalkingTree::_TalkingTree() {
 _TalkingTree::~_TalkingTree() {
 	singleton = nullptr;
 }
-

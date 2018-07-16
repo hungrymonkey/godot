@@ -25,7 +25,7 @@ protected:
 	static void _bind_methods();
 
 public:
-	static TalkingTree *get_singleton();
+	static TalkingTree *get_singleton() { return singleton; }
 	void lock();
 	void unlock();
 	void finish();
@@ -104,6 +104,12 @@ protected:
 	
 public:
 	static _TalkingTree *get_singleton() { return singleton; }
+	
+	void send_text(String msg);
+	void talk();
+	void mute();
+	void audio_message_signal( const PoolByteArray &data, int p_from);
+
 	_TalkingTree();
 	~_TalkingTree();
 };

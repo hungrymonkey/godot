@@ -99,6 +99,7 @@ void AudioStreamTalkingTree::_bind_methods(){
 	ClassDB::bind_method(D_METHOD("set_pid", "pid"), &AudioStreamTalkingTree::set_pid);
 	
 	ClassDB::bind_method(D_METHOD("set_format", "format"), &AudioStreamTalkingTree::set_format);	
+	ClassDB::bind_method(D_METHOD("set_mix_rate"), &AudioStreamTalkingTree::set_mix_rate);
 	ClassDB::bind_method(D_METHOD("get_format"), &AudioStreamTalkingTree::get_format);
 	ClassDB::bind_method(D_METHOD("clear"), &AudioStreamTalkingTree::clear);
 	ClassDB::bind_method(D_METHOD("get_stream_name"), &AudioStreamTalkingTree::get_stream_name);
@@ -138,6 +139,12 @@ Error AudioStreamTalkingTree::append_data(const uint8_t * pcm_data, int p_bytes)
 		WARN_PRINTS("Out of Memory: Increase AudioStreamTalkingTree buffer by power of 2.")
 		return ERR_OUT_OF_MEMORY;
 	}
+}
+Error AudioStreamTalkingTree::append_data(const Vector<uint8_t> &data, int p_from){
+	if(p_from == this->id){
+		return append_data(data.ptr(), data.size());
+	}
+	return OK;
 }
 int AudioStreamTalkingTree::get_available_bytes() const {	
 	//return data->size();

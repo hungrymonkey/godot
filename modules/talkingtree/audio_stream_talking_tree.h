@@ -70,6 +70,7 @@ public:
 	int get_available_bytes() const;
 	int get_byte_array( uint8_t *buf, int size);
 	Error append_data(const uint8_t * pcm_data, int p_bytes);
+	Error append_data(const Vector<uint8_t> &data, int p_from);
 	void set_format(Format p_format);
 	void set_mix_rate(float rate);
 	void clear();
