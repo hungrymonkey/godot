@@ -56,7 +56,6 @@ void TalkingTree::thread_func(void *p_udata){
 }
 
 void TalkingTree::_bind_methods() {
-	ClassDB::bind_method(D_METHOD("set_network_peer", "peer"), &TalkingTree::set_network_peer);
 	ClassDB::bind_method(D_METHOD("is_network_server"), &TalkingTree::is_network_server);
 	ClassDB::bind_method(D_METHOD("has_network_peer"), &TalkingTree::has_network_peer);
 	ClassDB::bind_method(D_METHOD("get_network_connected_peers"), &TalkingTree::get_network_connected_peers);
@@ -68,6 +67,7 @@ void TalkingTree::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("_connected_to_server"), &TalkingTree::_connected_to_server);
 	ClassDB::bind_method(D_METHOD("_connection_failed"), &TalkingTree::_connection_failed);
 	ClassDB::bind_method(D_METHOD("_server_disconnected"), &TalkingTree::_server_disconnected);
+	ClassDB::bind_method(D_METHOD("_queue_network_packet"), &TalkingTree::_queue_network_packet);
 
 	ADD_SIGNAL(MethodInfo("connected_to_server"));
 	ADD_SIGNAL(MethodInfo("connection_failed"));
@@ -209,8 +209,8 @@ bool TalkingTree::has_network_peer() const {
 	return multiplayer->has_network_peer();
 }
 
-void TalkingTree::set_network_peer(const Ref<MultiplayerAPI> &p_multiplayer) {
-	if (multiplayer->has_network_peer()) {
+void TalkingTree::set_multiplayer(const Ref<MultiplayerAPI> &p_multiplayer) {
+	if (multiplayer.is_valid() && multiplayer->has_network_peer()) {
 		multiplayer->disconnect("network_peer_connected", this, "_network_peer_connected");
 		multiplayer->disconnect("network_peer_packet", this, "_queue_network_packet");
 		multiplayer->disconnect("server_disconnected", this, "_server_disconnected");
@@ -219,7 +219,7 @@ void TalkingTree::set_network_peer(const Ref<MultiplayerAPI> &p_multiplayer) {
 		SDL2AudioCapture::get_singleton()->disconnect("get_pcm", this, "_create_audio_frame");
 	}
 
-	ERR_EXPLAIN("Supplied NetworkedNetworkPeer must be connecting or connected.");
+	ERR_EXPLAIN("Supplied MultiplayerAPI must be connecting or connected.");
 	ERR_FAIL_COND(p_multiplayer.is_valid() && p_multiplayer->get_network_peer()->get_connection_status() == NetworkedMultiplayerPeer::CONNECTION_DISCONNECTED);
 	multiplayer = p_multiplayer;
 	if (multiplayer.is_valid()) {
@@ -389,9 +389,13 @@ void _TalkingTree::_bind_methods() {
 
 	ClassDB::bind_method(D_METHOD("talk"), &_TalkingTree::talk);
 	ClassDB::bind_method(D_METHOD("mute"), &_TalkingTree::mute);
+	ClassDB::bind_method(D_METHOD("set_multiplayer"), &_TalkingTree::set_multiplayer);
 
 	ADD_SIGNAL(MethodInfo("text_message", PropertyInfo(Variant::STRING, "message"), PropertyInfo(Variant::INT, "sender_id")));
 	ADD_SIGNAL(MethodInfo("audio_message", PropertyInfo(Variant::POOL_BYTE_ARRAY, "message"), PropertyInfo(Variant::INT, "sender_id")));
+}
+void _TalkingTree::set_multiplayer(const Ref<MultiplayerAPI> &p_multiplayer){
+	TalkingTree::get_singleton()->set_multiplayer(p_multiplayer);
 }
 void _TalkingTree::send_text(const String &msg){
 	TalkingTree::get_singleton()->send_text(msg);

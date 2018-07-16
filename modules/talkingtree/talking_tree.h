@@ -40,7 +40,7 @@ private:
 public:
 	TalkingTree();
 	~TalkingTree();
-	void set_network_peer(const Ref<MultiplayerAPI> &p_network_peer);
+	void set_multiplayer(const Ref<MultiplayerAPI> &p_network_peer);
 	Vector<int> get_network_connected_peers() const;
 	bool is_network_server() const;
 	bool has_network_peer() const;
@@ -109,7 +109,7 @@ public:
 	void talk();
 	void mute();
 	void audio_message_signal( const PoolByteArray &data, int p_from);
-
+	void set_multiplayer(const Ref<MultiplayerAPI> &p_multiplayer);
 	_TalkingTree();
 	~_TalkingTree();
 };
