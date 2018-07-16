@@ -73,6 +73,7 @@ public:
 	Error append_pcm_data(const PoolByteArray &data, int p_from);
 	void set_format(Format p_format);
 	void set_mix_rate(float rate);
+	int get_mix_rate();
 	void clear();
 	Format get_format() const;
 	void set_pid(int id);

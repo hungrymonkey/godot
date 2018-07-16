@@ -100,10 +100,12 @@ void AudioStreamTalkingTree::_bind_methods(){
 	ClassDB::bind_method(D_METHOD("append_pcm_data", "pcm_data", "sender_id"), &AudioStreamTalkingTree::append_pcm_data);
 	ClassDB::bind_method(D_METHOD("set_format", "format"), &AudioStreamTalkingTree::set_format);	
 	ClassDB::bind_method(D_METHOD("set_mix_rate"), &AudioStreamTalkingTree::set_mix_rate);
+	ClassDB::bind_method(D_METHOD("get_mix_rate"), &AudioStreamTalkingTree::get_mix_rate);
 	ClassDB::bind_method(D_METHOD("get_format"), &AudioStreamTalkingTree::get_format);
 	ClassDB::bind_method(D_METHOD("clear"), &AudioStreamTalkingTree::clear);
 	ClassDB::bind_method(D_METHOD("get_stream_name"), &AudioStreamTalkingTree::get_stream_name);
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "format", PROPERTY_HINT_ENUM, "8-Bit,16-Bit"), "set_format", "get_format");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "mix_rate"), "set_mix_rate", "get_mix_rate");
 	ADD_SIGNAL(MethodInfo("audio_recieved"));
 	BIND_ENUM_CONSTANT(FORMAT_8_BITS);
 	BIND_ENUM_CONSTANT(FORMAT_16_BITS);
@@ -163,6 +165,9 @@ void AudioStreamTalkingTree::set_format(Format p_format) {
 }
 void AudioStreamTalkingTree::set_mix_rate(float rate){
 	mix_rate = rate;
+}
+int AudioStreamTalkingTree::get_mix_rate(){
+	return mix_rate;
 }
 void AudioStreamTalkingTree::set_pid(int p_id){
 	id = p_id;
