@@ -71,7 +71,6 @@ private:
 	void _connected_to_server();
 	void _connection_failed();
 	void _server_disconnected();
-	void _create_audio_peer_stream(int p_id);
 	//voip
 	int outgoing_sequence_number;
 	uint64_t last_sent_audio_timestamp;
@@ -85,7 +84,6 @@ private:
 	OpusEncoder *opusEncoder;
 	void reset_encoder();
 	//audiostream
-    HashMap<int, Ref<AudioStreamTalkingTree>> connected_audio_stream_peers;
 	void _create_audio_frame(PoolVector<uint8_t> pcm);
 	int _encode_audio_frame(int target, PoolVector<uint8_t> &pcm);
 	void _process_audio_packet(int p_from, const uint8_t *p_packet, int p_packet_len);
@@ -108,7 +106,6 @@ public:
 	void send_text(const String &msg);
 	void talk();
 	void mute();
-	void audio_message_signal( const PoolByteArray &data, int p_from);
 	void set_multiplayer(const Ref<MultiplayerAPI> &p_multiplayer);
 	_TalkingTree();
 	~_TalkingTree();

@@ -136,14 +136,6 @@ void TalkingTree::_send_user_info(int p_to){
 }
 
 
-void TalkingTree::_create_audio_peer_stream(int p_id){
-	connected_audio_stream_peers[p_id].instance();
-	connected_audio_stream_peers[p_id]->set_pid(p_id);
-	connected_audio_stream_peers[p_id]->set_mix_rate(TalkingTree::SAMPLE_RATE);
-	connected_audio_stream_peers[p_id]->set_format(AudioStreamTalkingTree::FORMAT_16_BITS);
-	
-}
-
 void TalkingTree::_send_packet(int p_to, PacketType type, google::protobuf::Message &message, NetworkedMultiplayerPeer::TransferMode transferMode){
 	PoolVector<uint8_t> packet;
 	//incorrect
@@ -170,15 +162,13 @@ void TalkingTree::_network_process_packet(int p_from, const uint8_t *p_packet, i
 			txtMsg.ParseFromArray( proto_packet, proto_packet_len );
 			String msg;
 			msg.parse_utf8(txtMsg.message().c_str(), txtMsg.message().length());
-			this->emit_signal("text_message", msg, p_from);
+			_TalkingTree::get_singleton()->emit_signal("text_message", msg, p_from);
 		} break;
 		case PacketType::USERINFO: {
 			TalkingTreeProto::UserInfo usrInfo;
 			usrInfo.ParseFromArray( proto_packet, proto_packet_len );
 			int game_id = usrInfo.user_id();
 			int tree_id = usrInfo.tree_id();
-			//create audio stream peer
-			_create_audio_peer_stream(tree_id);
 			if(multiplayer->is_network_server()){
 				//send everybody else
 				const int *k=NULL;
@@ -214,18 +204,17 @@ void TalkingTree::set_multiplayer(const Ref<MultiplayerAPI> &p_multiplayer) {
 		multiplayer->disconnect("network_peer_connected", this, "_network_peer_connected");
 		multiplayer->disconnect("network_peer_packet", this, "_queue_network_packet");
 		multiplayer->disconnect("server_disconnected", this, "_server_disconnected");
-		connected_audio_stream_peers.clear();
+		multiplayer->disconnect("connected_to_server", this, "_connected_to_server");
 		last_send_cache_id = 1;
 		SDL2AudioCapture::get_singleton()->disconnect("get_pcm", this, "_create_audio_frame");
 	}
 
-	ERR_EXPLAIN("Supplied MultiplayerAPI must be connecting or connected.");
 	ERR_FAIL_COND(p_multiplayer.is_valid() && p_multiplayer->get_network_peer()->get_connection_status() == NetworkedMultiplayerPeer::CONNECTION_DISCONNECTED);
 	multiplayer = p_multiplayer;
 	if (multiplayer.is_valid()) {
 		multiplayer->connect("network_peer_connected", this, "_network_peer_connected");
 		multiplayer->connect("network_peer_packet", this, "_queue_network_packet");
-		multiplayer->connect("connection_succeeded", this, "_connected_to_server");
+		multiplayer->connect("connected_to_server", this, "_connected_to_server");
 		multiplayer->connect("server_disconnected", this, "_server_disconnected");
 		SDL2AudioCapture::get_singleton()->connect("get_pcm", this, "_create_audio_frame");
 	}
@@ -240,13 +229,12 @@ void TalkingTree::_network_peer_connected(int p_id) {
 	emit_signal("network_peer_connected", p_id);
 }
 void TalkingTree::_network_peer_disconnected(int p_id) {
-	connected_audio_stream_peers.erase(p_id);
 	emit_signal("network_peer_disconnected", p_id);
 }
 void TalkingTree::_server_disconnected(){
-	connected_audio_stream_peers.clear();
 	emit_signal("server_disconnected");
 }
+
 int TalkingTree::get_network_unique_id() const {
 	ERR_FAIL_COND_V(!multiplayer.is_valid(), 0);
 	return multiplayer->get_network_unique_id();
@@ -337,7 +325,7 @@ void TalkingTree::_process_audio_packet(int p_from, const uint8_t *p_packet, int
 	PoolByteArray ret;
 	ret.resize(sizeof(int16_t) * out_len.first);
 	copymem( ret.write().ptr(), pcm_buf, sizeof(int16_t) * out_len.first);
-	_TalkingTree::get_singleton()->audio_message_signal(ret, p_from);
+	_TalkingTree::get_singleton()->emit_signal("audio_message", ret, p_from);
 }
 
 void TalkingTree::_create_audio_frame(PoolVector<uint8_t> pcm){
@@ -407,10 +395,6 @@ void _TalkingTree::mute(){
 void _TalkingTree::talk(){
 	SDL2AudioCapture::get_singleton()->talk();
 }
-void _TalkingTree::audio_message_signal( const PoolByteArray &data, int p_from){
-	emit_signal("audio_message", data, p_from);
-}
-
 _TalkingTree::_TalkingTree() {
 	singleton = this;	
 }
