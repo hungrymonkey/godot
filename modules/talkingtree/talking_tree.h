@@ -51,7 +51,7 @@ public:
 	void talk();
 	void mute();
 	//Text
-	void send_text(String msg);
+	void send_text(const String &msg);
 	
 private:
 	struct Packet {
@@ -105,7 +105,7 @@ protected:
 public:
 	static _TalkingTree *get_singleton() { return singleton; }
 	
-	void send_text(String msg);
+	void send_text(const String &msg);
 	void talk();
 	void mute();
 	void audio_message_signal( const PoolByteArray &data, int p_from);

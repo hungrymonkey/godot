@@ -98,6 +98,7 @@ TalkingTree::TalkingTree() : last_sent_audio_timestamp(0){
         ERR_PRINTS("failed to initialize bitrate to " + itos(TalkingTree::BIT_RATE) + "B/s: " + String(opus_strerror(error)));
 	}
 	reset_encoder();
+	singleton = this;
 }
 TalkingTree::~TalkingTree(){
     if (opusDecoder) {
@@ -107,6 +108,7 @@ TalkingTree::~TalkingTree(){
     if (opusEncoder) {
         opus_encoder_destroy(opusEncoder);
 	}
+	singleton = nullptr;
 }
 void TalkingTree::reset_encoder(){
 	int status = opus_encoder_ctl(opusEncoder, OPUS_RESET_STATE, nullptr);
@@ -116,7 +118,7 @@ void TalkingTree::reset_encoder(){
 	}
 	outgoing_sequence_number = 0;
 }
-void TalkingTree::send_text(String msg) {
+void TalkingTree::send_text(const String &msg) {
 	TalkingTreeProto::TextMessage txtMsg;
 	CharString m = msg.utf8();
 	txtMsg.set_message(m.get_data(), m.length());
@@ -391,7 +393,7 @@ void _TalkingTree::_bind_methods() {
 	ADD_SIGNAL(MethodInfo("text_message", PropertyInfo(Variant::STRING, "message"), PropertyInfo(Variant::INT, "sender_id")));
 	ADD_SIGNAL(MethodInfo("audio_message", PropertyInfo(Variant::POOL_BYTE_ARRAY, "message"), PropertyInfo(Variant::INT, "sender_id")));
 }
-void _TalkingTree::send_text(String msg){
+void _TalkingTree::send_text(const String &msg){
 	TalkingTree::get_singleton()->send_text(msg);
 }
 void _TalkingTree::mute(){
