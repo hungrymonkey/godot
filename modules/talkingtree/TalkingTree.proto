@@ -38,5 +38,5 @@ message UDPTunnel {
 
 message UserInfo {
 	optional uint32 user_id = 1;
-	optional uint32 tree_id = 2;
+	//optional uint32 tree_id = 2;
 }

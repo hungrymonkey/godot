@@ -168,7 +168,6 @@ void TalkingTree::_network_process_packet(int p_from, const uint8_t *p_packet, i
 			TalkingTreeProto::UserInfo usrInfo;
 			usrInfo.ParseFromArray( proto_packet, proto_packet_len );
 			int game_id = usrInfo.user_id();
-			int tree_id = usrInfo.tree_id();
 			if(multiplayer->is_network_server()){
 				//send everybody else
 				const int *k=NULL;
@@ -176,8 +175,7 @@ void TalkingTree::_network_process_packet(int p_from, const uint8_t *p_packet, i
 				for(int i = 0; peers.size(); i++) {
 					TalkingTreeProto::UserInfo otherUsr;
 					otherUsr.set_user_id(peers[i]);
-					_send_packet(p_from, PacketType::USERINFO, otherUsr, NetworkedMultiplayerPeer::TRANSFER_MODE_RELIABLE);
-					
+					_send_packet(p_from, PacketType::USERINFO, otherUsr, NetworkedMultiplayerPeer::TRANSFER_MODE_RELIABLE);				
 				}
 				//send yourself
 				_send_user_info(p_from);
