@@ -12,7 +12,7 @@
 #include "os/os.h"
 #include "pair.h"
 
-//#include "modules/talkingtree_storage/talking_tree_storage.h"
+#include "modules/talkingtree_storage/talking_tree_storage.h"
 
 TalkingTree *TalkingTree::singleton = nullptr;
 
@@ -304,21 +304,19 @@ void TalkingTree::_process_audio_packet(int p_from, const uint8_t *p_packet, int
 	int16_t pcm_buf[50000];
 	//print_line("talking: " + itos(p_from) + " size: " + itos(payloadLength));
 	Pair<int, bool> out_len;
-	//TreecursionVoiceTask *vt;
+	TreecursionVoiceTask *vt;
 	switch( codingType ){
 		case AudioCodingType::OPUS: {
 				out_len = _decode_opus_frame(payload, payloadLength, pcm_buf, 50000);
-				//vt = memnew(
-				//	TreecursionVoiceTask(OS::get_singleton()->get_ticks_usec(), connected_peers.getBackward(p_from), payload, payloadLength));
+				vt = memnew(
+					TreecursionVoiceTask(OS::get_singleton()->get_ticks_usec(), p_from, payload, payloadLength));
 				break;
 			}
 		default:
 			ERR_PRINTS("Unsupported Audio format: " + itos((uint32_t) codingType));
 			return;
 	}
-	//TalkingTreeStorage::get_singleton()->enqueue(vt);
-	//connected_audio_stream_peers[p_from]->append_data((uint8_t *) pcm_buf, sizeof(int16_t) * out_len.first);
-	//this->emit_signal("audio_message", p_from);
+	TalkingTreeStorage::get_singleton()->enqueue(vt);
 
 	PoolByteArray ret;
 	ret.resize(sizeof(int16_t) * out_len.first);
@@ -342,9 +340,9 @@ int TalkingTree::_encode_audio_frame(int target, PoolVector<uint8_t> &pcm){
 	uint8_t opus_buf[1024];
 	const int output_size = opus_encode(opusEncoder, pcm_buf, TalkingTree::FRAME_SIZE, opus_buf, 1024);
 	//get self network id
-	//TreecursionVoiceTask *vt = memnew(
-	//	TreecursionVoiceTask(OS::get_singleton()->get_ticks_usec(), game_peer->get_unique_id(), opus_buf, output_size));
-	//TalkingTreeStorage::get_singleton()->enqueue(vt);
+	TreecursionVoiceTask *vt = memnew(
+		TreecursionVoiceTask(OS::get_singleton()->get_ticks_usec(), get_network_unique_id(), opus_buf, output_size));
+	TalkingTreeStorage::get_singleton()->enqueue(vt);
 	Vector<uint8_t> encoded_size = VarInt(output_size).getEncoded();
 	Vector<uint8_t> encoded_seq = VarInt( outgoing_sequence_number ).getEncoded();
 
