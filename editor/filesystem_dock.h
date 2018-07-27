@@ -47,9 +47,12 @@
 #include "os/dir_access.h"
 #include "os/thread.h"
 
+#include "create_dialog.h"
+
 #include "dependency_editor.h"
 #include "editor_dir_dialog.h"
 #include "editor_file_system.h"
+#include "script_create_dialog.h"
 
 class EditorNode;
 
@@ -75,8 +78,10 @@ private:
 		FILE_REIMPORT,
 		FILE_INFO,
 		FILE_NEW_FOLDER,
+		FILE_NEW_SCRIPT,
 		FILE_SHOW_IN_EXPLORER,
-		FILE_COPY_PATH
+		FILE_COPY_PATH,
+		FILE_NEW_RESOURCE
 	};
 
 	enum FolderMenu {
@@ -104,6 +109,7 @@ private:
 	Button *button_display_mode;
 	Button *button_hist_next;
 	Button *button_hist_prev;
+	Button *button_show;
 	LineEdit *current_path;
 	LineEdit *search_box;
 	TextureRect *search_icon;
@@ -126,6 +132,9 @@ private:
 	LineEdit *duplicate_dialog_text;
 	ConfirmationDialog *make_dir_dialog;
 	LineEdit *make_dir_dialog_text;
+	ConfirmationDialog *overwrite_dialog;
+	ScriptCreateDialog *make_script_dialog_text;
+	CreateDialog *new_resource_dialog;
 
 	class FileOrFolder {
 	public:
@@ -142,6 +151,7 @@ private:
 	FileOrFolder to_rename;
 	FileOrFolder to_duplicate;
 	Vector<FileOrFolder> to_move;
+	String to_move_path;
 
 	Vector<String> history;
 	int history_pos;
@@ -176,17 +186,22 @@ private:
 	void _file_selected();
 	void _dir_selected();
 
-	void _get_all_files_in_dir(EditorFileSystemDirectory *efsd, Vector<String> &files) const;
+	void _get_all_items_in_dir(EditorFileSystemDirectory *efsd, Vector<String> &files, Vector<String> &folders) const;
 	void _find_remaps(EditorFileSystemDirectory *efsd, const Map<String, String> &renames, Vector<String> &to_remaps) const;
-	void _try_move_item(const FileOrFolder &p_item, const String &p_new_path, Map<String, String> &p_renames) const;
+	void _try_move_item(const FileOrFolder &p_item, const String &p_new_path, Map<String, String> &p_file_renames, Map<String, String> &p_folder_renames) const;
 	void _try_duplicate_item(const FileOrFolder &p_item, const String &p_new_path) const;
 	void _update_dependencies_after_move(const Map<String, String> &p_renames) const;
 	void _update_resource_paths_after_move(const Map<String, String> &p_renames) const;
+	void _update_favorite_dirs_list_after_move(const Map<String, String> &p_renames) const;
+	void _update_project_settings_after_move(const Map<String, String> &p_renames) const;
 
+	void _resource_created() const;
 	void _make_dir_confirm();
 	void _rename_operation_confirm();
 	void _duplicate_operation_confirm();
-	void _move_operation_confirm(const String &p_to_path);
+	void _move_with_overwrite();
+	bool _check_existing();
+	void _move_operation_confirm(const String &p_to_path, bool overwrite = false);
 
 	void _file_option(int p_option);
 	void _folder_option(int p_option);
@@ -200,6 +215,7 @@ private:
 	void _rescan();
 
 	void _favorites_pressed();
+	void _show_current_scene_file();
 	void _search_changed(const String &p_text);
 
 	void _dir_rmb_pressed(const Vector2 &p_pos);

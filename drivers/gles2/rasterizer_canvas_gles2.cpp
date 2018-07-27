@@ -5,8 +5,8 @@
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
+/* Copyright (c) 2007-2018 Juan Linietsky, Ariel Manzur.                 */
+/* Copyright (c) 2014-2018 Godot Engine contributors (cf. AUTHORS.md)    */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -139,6 +139,10 @@ RasterizerStorageGLES2::Texture *RasterizerCanvasGLES2::_bind_canvas_texture(con
 		} else {
 
 			texture = texture->get_ptr();
+
+			if (texture->redraw_if_visible) {
+				VisualServerRaster::redraw_request();
+			}
 
 			if (texture->render_target) {
 				texture->render_target->used_in_frame = true;
@@ -405,8 +409,6 @@ void RasterizerCanvasGLES2::_canvas_item_render_commands(Item *p_item, Item *cur
 
 					Rect2 dst_rect = Rect2(r->rect.position, r->rect.size);
 
-					state.canvas_shader.set_uniform(CanvasShaderGLES2::COLOR_TEXPIXEL_SIZE, texpixel_size);
-
 					if (dst_rect.size.width < 0) {
 						dst_rect.position.x += dst_rect.size.width;
 						dst_rect.size.width *= -1;
@@ -659,6 +661,8 @@ void RasterizerCanvasGLES2::_canvas_item_render_commands(Item *p_item, Item *cur
 				if (state.canvas_shader.bind())
 					_set_uniforms();
 
+				_bind_canvas_texture(RID(), RID());
+
 				if (pline->triangles.size()) {
 					_draw_generic(GL_TRIANGLE_STRIP, pline->triangles.size(), pline->triangles.ptr(), NULL, pline->triangle_colors.ptr(), pline->triangle_colors.size() == 1);
 				} else {
@@ -732,6 +736,9 @@ void RasterizerCanvasGLES2::_canvas_item_render_commands(Item *p_item, Item *cur
 							int y = storage->frame.current_rt->height - (current_clip->final_clip_rect.position.y + current_clip->final_clip_rect.size.y);
 							int w = current_clip->final_clip_rect.size.x;
 							int h = current_clip->final_clip_rect.size.y;
+
+							if (storage->frame.current_rt->flags[RasterizerStorage::RENDER_TARGET_VFLIP])
+								y = current_clip->final_clip_rect.position.y;
 
 							glScissor(x, y, w, h);
 
@@ -821,7 +828,10 @@ void RasterizerCanvasGLES2::canvas_render_items(Item *p_item_list, int p_z, cons
 
 			if (current_clip) {
 				glEnable(GL_SCISSOR_TEST);
-				glScissor(current_clip->final_clip_rect.position.x, (rt_size.height - (current_clip->final_clip_rect.position.y + current_clip->final_clip_rect.size.height)), current_clip->final_clip_rect.size.width, current_clip->final_clip_rect.size.height);
+				int y = storage->frame.current_rt->height - (current_clip->final_clip_rect.position.y + current_clip->final_clip_rect.size.y);
+				if (storage->frame.current_rt->flags[RasterizerStorage::RENDER_TARGET_VFLIP])
+					y = current_clip->final_clip_rect.position.y;
+				glScissor(current_clip->final_clip_rect.position.x, y, current_clip->final_clip_rect.size.width, current_clip->final_clip_rect.size.height);
 			} else {
 				glDisable(GL_SCISSOR_TEST);
 			}
@@ -903,6 +913,10 @@ void RasterizerCanvasGLES2::canvas_render_items(Item *p_item_list, int p_z, cons
 
 					t = t->get_ptr();
 
+					if (t->redraw_if_visible) {
+						VisualServerRaster::redraw_request();
+					}
+
 					glBindTexture(t->target, t->tex_id);
 				}
 			} else {
@@ -969,7 +983,10 @@ void RasterizerCanvasGLES2::canvas_render_items(Item *p_item_list, int p_z, cons
 
 		if (reclip) {
 			glEnable(GL_SCISSOR_TEST);
-			glScissor(current_clip->final_clip_rect.position.x, (rt_size.height - (current_clip->final_clip_rect.position.y + current_clip->final_clip_rect.size.height)), current_clip->final_clip_rect.size.width, current_clip->final_clip_rect.size.height);
+			int y = storage->frame.current_rt->height - (current_clip->final_clip_rect.position.y + current_clip->final_clip_rect.size.y);
+			if (storage->frame.current_rt->flags[RasterizerStorage::RENDER_TARGET_VFLIP])
+				y = current_clip->final_clip_rect.position.y;
+			glScissor(current_clip->final_clip_rect.position.x, y, current_clip->final_clip_rect.size.width, current_clip->final_clip_rect.size.height);
 		}
 
 		p_item_list = p_item_list->next;

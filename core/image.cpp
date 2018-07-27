@@ -33,6 +33,7 @@
 #include "core/io/image_loader.h"
 #include "core/os/copymem.h"
 #include "hash_map.h"
+#include "math_funcs.h"
 #include "print_string.h"
 
 #include "thirdparty/misc/hq2x.h"
@@ -366,6 +367,8 @@ int Image::get_mipmap_count() const {
 template <uint32_t read_bytes, bool read_alpha, uint32_t write_bytes, bool write_alpha, bool read_gray, bool write_gray>
 static void _convert(int p_width, int p_height, const uint8_t *p_src, uint8_t *p_dst) {
 
+	uint32_t max_bytes = MAX(read_bytes, write_bytes);
+
 	for (int y = 0; y < p_height; y++) {
 		for (int x = 0; x < p_width; x++) {
 
@@ -379,7 +382,8 @@ static void _convert(int p_width, int p_height, const uint8_t *p_src, uint8_t *p
 				rgba[1] = rofs[0];
 				rgba[2] = rofs[0];
 			} else {
-				for (uint32_t i = 0; i < MAX(read_bytes, write_bytes); i++) {
+
+				for (uint32_t i = 0; i < max_bytes; i++) {
 
 					rgba[i] = (i < read_bytes) ? rofs[i] : 0;
 				}
@@ -522,7 +526,7 @@ static double _bicubic_interp_kernel(double x) {
 }
 
 template <int CC>
-static void _scale_cubic(const uint8_t *p_src, uint8_t *p_dst, uint32_t p_src_width, uint32_t p_src_height, uint32_t p_dst_width, uint32_t p_dst_height) {
+static void _scale_cubic(const uint8_t *__restrict p_src, uint8_t *__restrict p_dst, uint32_t p_src_width, uint32_t p_src_height, uint32_t p_dst_width, uint32_t p_dst_height) {
 
 	// get source image size
 	int width = p_src_width;
@@ -552,7 +556,7 @@ static void _scale_cubic(const uint8_t *p_src, uint8_t *p_dst, uint32_t p_src_wi
 
 			// initial pixel value
 
-			uint8_t *dst = p_dst + (y * p_dst_width + x) * CC;
+			uint8_t *__restrict dst = p_dst + (y * p_dst_width + x) * CC;
 
 			double color[CC];
 			for (int i = 0; i < CC; i++) {
@@ -580,7 +584,7 @@ static void _scale_cubic(const uint8_t *p_src, uint8_t *p_dst, uint32_t p_src_wi
 						ox2 = xmax;
 
 					// get pixel of original image
-					const uint8_t *p = p_src + (oy2 * p_src_width + ox2) * CC;
+					const uint8_t *__restrict p = p_src + (oy2 * p_src_width + ox2) * CC;
 
 					for (int i = 0; i < CC; i++) {
 
@@ -597,7 +601,7 @@ static void _scale_cubic(const uint8_t *p_src, uint8_t *p_dst, uint32_t p_src_wi
 }
 
 template <int CC>
-static void _scale_bilinear(const uint8_t *p_src, uint8_t *p_dst, uint32_t p_src_width, uint32_t p_src_height, uint32_t p_dst_width, uint32_t p_dst_height) {
+static void _scale_bilinear(const uint8_t *__restrict p_src, uint8_t *__restrict p_dst, uint32_t p_src_width, uint32_t p_src_height, uint32_t p_dst_width, uint32_t p_dst_height) {
 
 	enum {
 		FRAC_BITS = 8,
@@ -652,7 +656,7 @@ static void _scale_bilinear(const uint8_t *p_src, uint8_t *p_dst, uint32_t p_src
 }
 
 template <int CC>
-static void _scale_nearest(const uint8_t *p_src, uint8_t *p_dst, uint32_t p_src_width, uint32_t p_src_height, uint32_t p_dst_width, uint32_t p_dst_height) {
+static void _scale_nearest(const uint8_t *__restrict p_src, uint8_t *__restrict p_dst, uint32_t p_src_width, uint32_t p_src_height, uint32_t p_dst_width, uint32_t p_dst_height) {
 
 	for (uint32_t i = 0; i < p_dst_height; i++) {
 
@@ -670,6 +674,16 @@ static void _scale_nearest(const uint8_t *p_src, uint8_t *p_dst, uint32_t p_src_
 				p_dst[i * p_dst_width * CC + j * CC + l] = p;
 			}
 		}
+	}
+}
+
+static void _overlay(const uint8_t *__restrict p_src, uint8_t *__restrict p_dst, float p_alpha, uint32_t p_width, uint32_t p_height, uint32_t p_pixel_size) {
+
+	uint16_t alpha = CLAMP((uint16_t)(p_alpha * 256.0f), 0, 256);
+
+	for (uint32_t i = 0; i < p_width * p_height * p_pixel_size; i++) {
+
+		p_dst[i] = (p_dst[i] * (256 - alpha) + p_src[i] * alpha) >> 8;
 	}
 }
 
@@ -704,6 +718,8 @@ void Image::resize(int p_width, int p_height, Interpolation p_interpolation) {
 		ERR_FAIL();
 	}
 
+	bool mipmap_aware = p_interpolation == INTERPOLATE_TRILINEAR /* || p_interpolation == INTERPOLATE_TRICUBIC */;
+
 	ERR_FAIL_COND(p_width <= 0);
 	ERR_FAIL_COND(p_height <= 0);
 	ERR_FAIL_COND(p_width > MAX_WIDTH);
@@ -713,6 +729,32 @@ void Image::resize(int p_width, int p_height, Interpolation p_interpolation) {
 		return;
 
 	Image dst(p_width, p_height, 0, format);
+
+	// Setup mipmap-aware scaling
+	Image dst2;
+	int mip1;
+	int mip2;
+	float mip1_weight;
+	if (mipmap_aware) {
+		float avg_scale = ((float)p_width / width + (float)p_height / height) * 0.5f;
+		if (avg_scale >= 1.0f) {
+			mipmap_aware = false;
+		} else {
+			float level = Math::log(1.0f / avg_scale) / Math::log(2.0f);
+			mip1 = CLAMP((int)Math::floor(level), 0, get_mipmap_count());
+			mip2 = CLAMP((int)Math::ceil(level), 0, get_mipmap_count());
+			mip1_weight = 1.0f - (level - mip1);
+		}
+	}
+	bool interpolate_mipmaps = mipmap_aware && mip1 != mip2;
+	if (interpolate_mipmaps) {
+		dst2.create(p_width, p_height, 0, format);
+	}
+	bool had_mipmaps = mipmaps;
+	if (interpolate_mipmaps && !had_mipmaps) {
+		generate_mipmaps();
+	}
+	// --
 
 	PoolVector<uint8_t>::Read r = data.read();
 	const unsigned char *r_ptr = r.ptr();
@@ -731,13 +773,57 @@ void Image::resize(int p_width, int p_height, Interpolation p_interpolation) {
 				case 4: _scale_nearest<4>(r_ptr, w_ptr, width, height, p_width, p_height); break;
 			}
 		} break;
-		case INTERPOLATE_BILINEAR: {
+		case INTERPOLATE_BILINEAR:
+		case INTERPOLATE_TRILINEAR: {
 
-			switch (get_format_pixel_size(format)) {
-				case 1: _scale_bilinear<1>(r_ptr, w_ptr, width, height, p_width, p_height); break;
-				case 2: _scale_bilinear<2>(r_ptr, w_ptr, width, height, p_width, p_height); break;
-				case 3: _scale_bilinear<3>(r_ptr, w_ptr, width, height, p_width, p_height); break;
-				case 4: _scale_bilinear<4>(r_ptr, w_ptr, width, height, p_width, p_height); break;
+			for (int i = 0; i < 2; ++i) {
+				int src_width;
+				int src_height;
+				const unsigned char *src_ptr;
+
+				if (!mipmap_aware) {
+					if (i == 0) {
+						// Standard behavior
+						src_width = width;
+						src_height = height;
+						src_ptr = r_ptr;
+					} else {
+						// No need for a second iteration
+						break;
+					}
+				} else {
+					if (i == 0) {
+						// Read from the first mipmap that will be interpolated
+						// (if both levels are the same, we will not interpolate, but at least we'll sample from the right level)
+						int offs;
+						_get_mipmap_offset_and_size(mip1, offs, src_width, src_height);
+						src_ptr = r_ptr + offs;
+					} else if (!interpolate_mipmaps) {
+						// No need generate a second image
+						break;
+					} else {
+						// Switch to read from the second mipmap that will be interpolated
+						int offs;
+						_get_mipmap_offset_and_size(mip2, offs, src_width, src_height);
+						src_ptr = r_ptr + offs;
+						// Switch to write to the second destination image
+						w = dst2.data.write();
+						w_ptr = w.ptr();
+					}
+				}
+
+				switch (get_format_pixel_size(format)) {
+					case 1: _scale_bilinear<1>(src_ptr, w_ptr, src_width, src_height, p_width, p_height); break;
+					case 2: _scale_bilinear<2>(src_ptr, w_ptr, src_width, src_height, p_width, p_height); break;
+					case 3: _scale_bilinear<3>(src_ptr, w_ptr, src_width, src_height, p_width, p_height); break;
+					case 4: _scale_bilinear<4>(src_ptr, w_ptr, src_width, src_height, p_width, p_height); break;
+				}
+			}
+
+			if (interpolate_mipmaps) {
+				// Switch to read again from the first scaled mipmap to overlay it over the second
+				r = dst.data.read();
+				_overlay(r.ptr(), w.ptr(), mip1_weight, p_width, p_height, get_format_pixel_size(format));
 			}
 
 		} break;
@@ -756,7 +842,11 @@ void Image::resize(int p_width, int p_height, Interpolation p_interpolation) {
 	r = PoolVector<uint8_t>::Read();
 	w = PoolVector<uint8_t>::Write();
 
-	if (mipmaps > 0)
+	if (interpolate_mipmaps) {
+		dst._copy_internals_from(dst2);
+	}
+
+	if (had_mipmaps)
 		dst.generate_mipmaps();
 
 	_copy_internals_from(dst);
@@ -937,7 +1027,7 @@ bool Image::_can_modify(Format p_format) const {
 	return p_format <= FORMAT_RGBE9995;
 }
 
-template <int CC>
+template <int CC, bool renormalize>
 static void _generate_po2_mipmap(const uint8_t *p_src, uint8_t *p_dst, uint32_t p_width, uint32_t p_height) {
 
 	//fast power of 2 mipmap generation
@@ -961,6 +1051,19 @@ static void _generate_po2_mipmap(const uint8_t *p_src, uint8_t *p_dst, uint32_t 
 				val += rdown_ptr[j];
 				val += rdown_ptr[j + CC];
 				dst_ptr[j] = val >> 2;
+			}
+
+			if (renormalize) {
+				Vector3 n(dst_ptr[0] / 255.0, dst_ptr[1] / 255.0, dst_ptr[2] / 255.0);
+				n *= 2.0;
+				n -= Vector3(1, 1, 1);
+				n.normalize();
+				n += Vector3(1, 1, 1);
+				n *= 0.5;
+				n *= 255;
+				dst_ptr[0] = CLAMP(int(n.x), 0, 255);
+				dst_ptr[1] = CLAMP(int(n.y), 0, 255);
+				dst_ptr[2] = CLAMP(int(n.z), 0, 255);
 			}
 
 			dst_ptr += CC;
@@ -1045,11 +1148,11 @@ void Image::shrink_x2() {
 			switch (format) {
 
 				case FORMAT_L8:
-				case FORMAT_R8: _generate_po2_mipmap<1>(r.ptr(), w.ptr(), width, height); break;
-				case FORMAT_LA8: _generate_po2_mipmap<2>(r.ptr(), w.ptr(), width, height); break;
-				case FORMAT_RG8: _generate_po2_mipmap<2>(r.ptr(), w.ptr(), width, height); break;
-				case FORMAT_RGB8: _generate_po2_mipmap<3>(r.ptr(), w.ptr(), width, height); break;
-				case FORMAT_RGBA8: _generate_po2_mipmap<4>(r.ptr(), w.ptr(), width, height); break;
+				case FORMAT_R8: _generate_po2_mipmap<1, false>(r.ptr(), w.ptr(), width, height); break;
+				case FORMAT_LA8: _generate_po2_mipmap<2, false>(r.ptr(), w.ptr(), width, height); break;
+				case FORMAT_RG8: _generate_po2_mipmap<2, false>(r.ptr(), w.ptr(), width, height); break;
+				case FORMAT_RGB8: _generate_po2_mipmap<3, false>(r.ptr(), w.ptr(), width, height); break;
+				case FORMAT_RGBA8: _generate_po2_mipmap<4, false>(r.ptr(), w.ptr(), width, height); break;
 				default: {}
 			}
 		}
@@ -1060,7 +1163,37 @@ void Image::shrink_x2() {
 	}
 }
 
-Error Image::generate_mipmaps() {
+void Image::normalize() {
+
+	bool used_mipmaps = has_mipmaps();
+	if (used_mipmaps) {
+		clear_mipmaps();
+	}
+
+	lock();
+
+	for (int y = 0; y < height; y++) {
+
+		for (int x = 0; x < width; x++) {
+
+			Color c = get_pixel(x, y);
+			Vector3 v(c.r * 2.0 - 1.0, c.g * 2.0 - 1.0, c.b * 2.0 - 1.0);
+			v.normalize();
+			c.r = v.x * 0.5 + 0.5;
+			c.g = v.y * 0.5 + 0.5;
+			c.b = v.z * 0.5 + 0.5;
+			set_pixel(x, y, c);
+		}
+	}
+
+	unlock();
+
+	if (used_mipmaps) {
+		generate_mipmaps(true);
+	}
+}
+
+Error Image::generate_mipmaps(bool p_renormalize) {
 
 	if (!_can_modify(format)) {
 		ERR_EXPLAIN("Cannot generate mipmaps in indexed, compressed or custom image formats.");
@@ -1077,61 +1210,40 @@ Error Image::generate_mipmaps() {
 
 	PoolVector<uint8_t>::Write wp = data.write();
 
-	if (next_power_of_2(width) == uint32_t(width) && next_power_of_2(height) == uint32_t(height)) {
-		//use fast code for powers of 2
-		int prev_ofs = 0;
-		int prev_h = height;
-		int prev_w = width;
+	int prev_ofs = 0;
+	int prev_h = height;
+	int prev_w = width;
 
-		for (int i = 1; i < mmcount; i++) {
+	for (int i = 1; i < mmcount; i++) {
 
-			int ofs, w, h;
-			_get_mipmap_offset_and_size(i, ofs, w, h);
+		int ofs, w, h;
+		_get_mipmap_offset_and_size(i, ofs, w, h);
 
-			switch (format) {
+		switch (format) {
 
-				case FORMAT_L8:
-				case FORMAT_R8: _generate_po2_mipmap<1>(&wp[prev_ofs], &wp[ofs], prev_w, prev_h); break;
-				case FORMAT_LA8:
-				case FORMAT_RG8: _generate_po2_mipmap<2>(&wp[prev_ofs], &wp[ofs], prev_w, prev_h); break;
-				case FORMAT_RGB8: _generate_po2_mipmap<3>(&wp[prev_ofs], &wp[ofs], prev_w, prev_h); break;
-				case FORMAT_RGBA8: _generate_po2_mipmap<4>(&wp[prev_ofs], &wp[ofs], prev_w, prev_h); break;
-				default: {}
-			}
+			case FORMAT_L8:
+			case FORMAT_R8: _generate_po2_mipmap<1, false>(&wp[prev_ofs], &wp[ofs], prev_w, prev_h); break;
+			case FORMAT_LA8:
+			case FORMAT_RG8: _generate_po2_mipmap<2, false>(&wp[prev_ofs], &wp[ofs], prev_w, prev_h); break;
+			case FORMAT_RGB8:
+				if (p_renormalize)
+					_generate_po2_mipmap<3, true>(&wp[prev_ofs], &wp[ofs], prev_w, prev_h);
+				else
+					_generate_po2_mipmap<3, false>(&wp[prev_ofs], &wp[ofs], prev_w, prev_h);
 
-			prev_ofs = ofs;
-			prev_w = w;
-			prev_h = h;
+				break;
+			case FORMAT_RGBA8:
+				if (p_renormalize)
+					_generate_po2_mipmap<4, true>(&wp[prev_ofs], &wp[ofs], prev_w, prev_h);
+				else
+					_generate_po2_mipmap<4, false>(&wp[prev_ofs], &wp[ofs], prev_w, prev_h);
+				break;
+			default: {}
 		}
 
-	} else {
-		//use slow code..
-
-		//use bilinear filtered code for non powers of 2
-		int prev_ofs = 0;
-		int prev_h = height;
-		int prev_w = width;
-
-		for (int i = 1; i < mmcount; i++) {
-
-			int ofs, w, h;
-			_get_mipmap_offset_and_size(i, ofs, w, h);
-
-			switch (format) {
-
-				case FORMAT_L8:
-				case FORMAT_R8: _scale_bilinear<1>(&wp[prev_ofs], &wp[ofs], prev_w, prev_h, w, h); break;
-				case FORMAT_LA8:
-				case FORMAT_RG8: _scale_bilinear<2>(&wp[prev_ofs], &wp[ofs], prev_w, prev_h, w, h); break;
-				case FORMAT_RGB8: _scale_bilinear<3>(&wp[prev_ofs], &wp[ofs], prev_w, prev_h, w, h); break;
-				case FORMAT_RGBA8: _scale_bilinear<4>(&wp[prev_ofs], &wp[ofs], prev_w, prev_h, w, h); break;
-				default: {}
-			}
-
-			prev_ofs = ofs;
-			prev_w = w;
-			prev_h = h;
-		}
+		prev_ofs = ofs;
+		prev_w = w;
+		prev_h = h;
 	}
 
 	mipmaps = true;
@@ -1165,6 +1277,9 @@ PoolVector<uint8_t> Image::get_data() const {
 }
 
 void Image::create(int p_width, int p_height, bool p_use_mipmaps, Format p_format) {
+
+	ERR_FAIL_INDEX(p_width - 1, MAX_WIDTH);
+	ERR_FAIL_INDEX(p_height - 1, MAX_HEIGHT);
 
 	int mm = 0;
 	int size = _get_dst_image_size(p_width, p_height, p_format, mm, p_use_mipmaps ? -1 : 0);
@@ -1630,6 +1745,12 @@ void Image::blit_rect(const Ref<Image> &p_src, const Rect2 &p_src_rect, const Po
 	ERR_FAIL_COND(format != p_src->format);
 
 	Rect2i clipped_src_rect = Rect2i(0, 0, p_src->width, p_src->height).clip(p_src_rect);
+
+	if (p_dest.x < 0)
+		clipped_src_rect.position.x = ABS(p_dest.x);
+	if (p_dest.y < 0)
+		clipped_src_rect.position.y = ABS(p_dest.y);
+
 	if (clipped_src_rect.size.x <= 0 || clipped_src_rect.size.y <= 0)
 		return;
 
@@ -1678,6 +1799,12 @@ void Image::blit_rect_mask(const Ref<Image> &p_src, const Ref<Image> &p_mask, co
 	ERR_FAIL_COND(format != p_src->format);
 
 	Rect2i clipped_src_rect = Rect2i(0, 0, p_src->width, p_src->height).clip(p_src_rect);
+
+	if (p_dest.x < 0)
+		clipped_src_rect.position.x = ABS(p_dest.x);
+	if (p_dest.y < 0)
+		clipped_src_rect.position.y = ABS(p_dest.y);
+
 	if (clipped_src_rect.size.x <= 0 || clipped_src_rect.size.y <= 0)
 		return;
 
@@ -1729,6 +1856,12 @@ void Image::blend_rect(const Ref<Image> &p_src, const Rect2 &p_src_rect, const P
 	ERR_FAIL_COND(format != p_src->format);
 
 	Rect2i clipped_src_rect = Rect2i(0, 0, p_src->width, p_src->height).clip(p_src_rect);
+
+	if (p_dest.x < 0)
+		clipped_src_rect.position.x = ABS(p_dest.x);
+	if (p_dest.y < 0)
+		clipped_src_rect.position.y = ABS(p_dest.y);
+
 	if (clipped_src_rect.size.x <= 0 || clipped_src_rect.size.y <= 0)
 		return;
 
@@ -1777,6 +1910,12 @@ void Image::blend_rect_mask(const Ref<Image> &p_src, const Ref<Image> &p_mask, c
 	ERR_FAIL_COND(format != p_src->format);
 
 	Rect2i clipped_src_rect = Rect2i(0, 0, p_src->width, p_src->height).clip(p_src_rect);
+
+	if (p_dest.x < 0)
+		clipped_src_rect.position.x = ABS(p_dest.x);
+	if (p_dest.y < 0)
+		clipped_src_rect.position.y = ABS(p_dest.y);
+
 	if (clipped_src_rect.size.x <= 0 || clipped_src_rect.size.y <= 0)
 		return;
 
@@ -1846,8 +1985,9 @@ void Image::fill(const Color &c) {
 	unlock();
 }
 
-Ref<Image> (*Image::_png_mem_loader_func)(const uint8_t *, int) = NULL;
-Ref<Image> (*Image::_jpg_mem_loader_func)(const uint8_t *, int) = NULL;
+ImageMemLoadFunc Image::_png_mem_loader_func = NULL;
+ImageMemLoadFunc Image::_jpg_mem_loader_func = NULL;
+ImageMemLoadFunc Image::_webp_mem_loader_func = NULL;
 
 void (*Image::_image_compress_bc_func)(Image *, Image::CompressSource) = NULL;
 void (*Image::_image_compress_pvrtc2_func)(Image *) = NULL;
@@ -1910,6 +2050,10 @@ void Image::lock() {
 void Image::unlock() {
 
 	write_lock = PoolVector<uint8_t>::Write();
+}
+
+Color Image::get_pixelv(const Point2 &p_src) const {
+	return get_pixel(p_src.x, p_src.y);
 }
 
 Color Image::get_pixel(int p_x, int p_y) const {
@@ -2056,6 +2200,10 @@ Color Image::get_pixel(int p_x, int p_y) const {
 	}
 
 	return Color();
+}
+
+void Image::set_pixelv(const Point2 &p_dst, const Color &p_color) {
+	return set_pixel(p_dst.x, p_dst.y, p_color);
 }
 
 void Image::set_pixel(int p_x, int p_y, const Color &p_color) {
@@ -2249,7 +2397,7 @@ void Image::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("crop", "width", "height"), &Image::crop);
 	ClassDB::bind_method(D_METHOD("flip_x"), &Image::flip_x);
 	ClassDB::bind_method(D_METHOD("flip_y"), &Image::flip_y);
-	ClassDB::bind_method(D_METHOD("generate_mipmaps"), &Image::generate_mipmaps);
+	ClassDB::bind_method(D_METHOD("generate_mipmaps", "renormalize"), &Image::generate_mipmaps, DEFVAL(false));
 	ClassDB::bind_method(D_METHOD("clear_mipmaps"), &Image::clear_mipmaps);
 
 	ClassDB::bind_method(D_METHOD("create", "width", "height", "use_mipmaps", "format"), &Image::_create_empty);
@@ -2271,6 +2419,8 @@ void Image::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("premultiply_alpha"), &Image::premultiply_alpha);
 	ClassDB::bind_method(D_METHOD("srgb_to_linear"), &Image::srgb_to_linear);
 	ClassDB::bind_method(D_METHOD("normalmap_to_xy"), &Image::normalmap_to_xy);
+	ClassDB::bind_method(D_METHOD("rgbe_to_srgb"), &Image::rgbe_to_srgb);
+	ClassDB::bind_method(D_METHOD("bumpmap_to_normalmap", "bump_scale"), &Image::bumpmap_to_normalmap, DEFVAL(1.0));
 
 	ClassDB::bind_method(D_METHOD("blit_rect", "src", "src_rect", "dst"), &Image::blit_rect);
 	ClassDB::bind_method(D_METHOD("blit_rect_mask", "src", "mask", "src_rect", "dst"), &Image::blit_rect_mask);
@@ -2288,11 +2438,14 @@ void Image::_bind_methods() {
 
 	ClassDB::bind_method(D_METHOD("lock"), &Image::lock);
 	ClassDB::bind_method(D_METHOD("unlock"), &Image::unlock);
-	ClassDB::bind_method(D_METHOD("set_pixel", "x", "y", "color"), &Image::set_pixel);
+	ClassDB::bind_method(D_METHOD("get_pixelv", "src"), &Image::get_pixelv);
 	ClassDB::bind_method(D_METHOD("get_pixel", "x", "y"), &Image::get_pixel);
+	ClassDB::bind_method(D_METHOD("set_pixelv", "dst", "color"), &Image::set_pixelv);
+	ClassDB::bind_method(D_METHOD("set_pixel", "x", "y", "color"), &Image::set_pixel);
 
 	ClassDB::bind_method(D_METHOD("load_png_from_buffer", "buffer"), &Image::load_png_from_buffer);
 	ClassDB::bind_method(D_METHOD("load_jpg_from_buffer", "buffer"), &Image::load_jpg_from_buffer);
+	ClassDB::bind_method(D_METHOD("load_webp_from_buffer", "buffer"), &Image::load_webp_from_buffer);
 
 	ADD_PROPERTY(PropertyInfo(Variant::DICTIONARY, "data", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE), "_set_data", "_get_data");
 
@@ -2338,6 +2491,7 @@ void Image::_bind_methods() {
 	BIND_ENUM_CONSTANT(INTERPOLATE_NEAREST);
 	BIND_ENUM_CONSTANT(INTERPOLATE_BILINEAR);
 	BIND_ENUM_CONSTANT(INTERPOLATE_CUBIC);
+	BIND_ENUM_CONSTANT(INTERPOLATE_TRILINEAR);
 
 	BIND_ENUM_CONSTANT(ALPHA_NONE);
 	BIND_ENUM_CONSTANT(ALPHA_BIT);
@@ -2377,6 +2531,78 @@ void Image::normalmap_to_xy() {
 	}
 
 	convert(Image::FORMAT_LA8);
+}
+
+Ref<Image> Image::rgbe_to_srgb() {
+
+	if (data.size() == 0)
+		return Ref<Image>();
+
+	ERR_FAIL_COND_V(format != FORMAT_RGBE9995, Ref<Image>());
+
+	Ref<Image> new_image;
+	new_image.instance();
+	new_image->create(width, height, 0, Image::FORMAT_RGB8);
+
+	lock();
+
+	new_image->lock();
+
+	for (int row = 0; row < height; row++) {
+		for (int col = 0; col < width; col++) {
+			new_image->set_pixel(col, row, get_pixel(col, row).to_srgb());
+		}
+	}
+
+	unlock();
+	new_image->unlock();
+
+	if (has_mipmaps()) {
+		new_image->generate_mipmaps();
+	}
+
+	return new_image;
+}
+
+void Image::bumpmap_to_normalmap(float bump_scale) {
+	ERR_FAIL_COND(!_can_modify(format));
+	convert(Image::FORMAT_RF);
+
+	PoolVector<uint8_t> result_image; //rgba output
+	result_image.resize(width * height * 4);
+
+	{
+		PoolVector<uint8_t>::Read rp = data.read();
+		PoolVector<uint8_t>::Write wp = result_image.write();
+
+		unsigned char *write_ptr = wp.ptr();
+		float *read_ptr = (float *)rp.ptr();
+
+		for (int ty = 0; ty < height; ty++) {
+			int py = ty + 1;
+			if (py >= height) py -= height;
+
+			for (int tx = 0; tx < width; tx++) {
+				int px = tx + 1;
+				if (px >= width) px -= width;
+				float here = read_ptr[ty * width + tx];
+				float to_right = read_ptr[ty * width + px];
+				float above = read_ptr[py * width + tx];
+				Vector3 up = Vector3(0, 1, (here - above) * bump_scale);
+				Vector3 across = Vector3(1, 0, (to_right - here) * bump_scale);
+
+				Vector3 normal = across.cross(up);
+				normal.normalize();
+
+				write_ptr[((ty * width + tx) << 2) + 0] = (127.5 + normal.x * 127.5);
+				write_ptr[((ty * width + tx) << 2) + 1] = (127.5 + normal.y * 127.5);
+				write_ptr[((ty * width + tx) << 2) + 2] = (127.5 + normal.z * 127.5);
+				write_ptr[((ty * width + tx) << 2) + 3] = 255;
+			}
+		}
+	}
+	format = FORMAT_RGBA8;
+	data = result_image;
 }
 
 void Image::srgb_to_linear() {
@@ -2513,32 +2739,26 @@ String Image::get_format_name(Format p_format) {
 }
 
 Error Image::load_png_from_buffer(const PoolVector<uint8_t> &p_array) {
-
-	int buffer_size = p_array.size();
-
-	ERR_FAIL_COND_V(buffer_size == 0, ERR_INVALID_PARAMETER);
-	ERR_FAIL_COND_V(!_png_mem_loader_func, ERR_INVALID_PARAMETER);
-
-	PoolVector<uint8_t>::Read r = p_array.read();
-
-	Ref<Image> image = _png_mem_loader_func(r.ptr(), buffer_size);
-	ERR_FAIL_COND_V(!image.is_valid(), ERR_PARSE_ERROR);
-
-	copy_internals_from(image);
-
-	return OK;
+	return _load_from_buffer(p_array, _png_mem_loader_func);
 }
 
 Error Image::load_jpg_from_buffer(const PoolVector<uint8_t> &p_array) {
+	return _load_from_buffer(p_array, _jpg_mem_loader_func);
+}
 
+Error Image::load_webp_from_buffer(const PoolVector<uint8_t> &p_array) {
+	return _load_from_buffer(p_array, _webp_mem_loader_func);
+}
+
+Error Image::_load_from_buffer(const PoolVector<uint8_t> &p_array, ImageMemLoadFunc p_loader) {
 	int buffer_size = p_array.size();
 
 	ERR_FAIL_COND_V(buffer_size == 0, ERR_INVALID_PARAMETER);
-	ERR_FAIL_COND_V(!_jpg_mem_loader_func, ERR_INVALID_PARAMETER);
+	ERR_FAIL_COND_V(!p_loader, ERR_INVALID_PARAMETER);
 
 	PoolVector<uint8_t>::Read r = p_array.read();
 
-	Ref<Image> image = _jpg_mem_loader_func(r.ptr(), buffer_size);
+	Ref<Image> image = p_loader(r.ptr(), buffer_size);
 	ERR_FAIL_COND_V(!image.is_valid(), ERR_PARSE_ERROR);
 
 	copy_internals_from(image);

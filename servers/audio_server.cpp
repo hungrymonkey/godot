@@ -101,10 +101,26 @@ int AudioDriver::get_total_channels_by_speaker_mode(AudioDriver::SpeakerMode p_m
 	ERR_FAIL_V(2);
 }
 
+Array AudioDriver::get_device_list() {
+	Array list;
+
+	list.push_back("Default");
+
+	return list;
+}
+
+String AudioDriver::get_device() {
+	return "Default";
+}
+
 AudioDriver::AudioDriver() {
 
 	_last_mix_time = 0;
 	_mix_amount = 0;
+
+#ifdef DEBUG_ENABLED
+	prof_time = 0;
+#endif
 }
 
 AudioDriver *AudioDriverManager::drivers[MAX_DRIVERS];
@@ -172,6 +188,10 @@ void AudioServer::_driver_process(int p_frames, int32_t *p_buffer) {
 
 	int todo = p_frames;
 
+#ifdef DEBUG_ENABLED
+	uint64_t prof_ticks = OS::get_singleton()->get_ticks_usec();
+#endif
+
 	if (channel_count != get_channel_count()) {
 		// Amount of channels changed due to a device change
 		// reinitialize the buses channels and buffers
@@ -223,27 +243,15 @@ void AudioServer::_driver_process(int p_frames, int32_t *p_buffer) {
 		to_mix -= to_copy;
 	}
 
-#ifdef DEBUG_ENABLED
-	if (OS::get_singleton() && OS::get_singleton()->is_stdout_verbose()) {
-		static uint64_t first_ticks = 0;
-		static uint64_t last_ticks = 0;
-		static uint64_t ticks = 0;
-		static int count = 0;
-		static int total = 0;
-
-		ticks = OS::get_singleton()->get_ticks_msec();
-		if ((ticks - first_ticks) > 10 * 1000 && count > 0) {
-			print_line("Audio Driver " + String(AudioDriver::get_singleton()->get_name()) + " average latency: " + itos(total / count) + "ms (frame=" + itos(p_frames) + ")");
-			first_ticks = ticks;
-			total = 0;
-			count = 0;
-		}
-
-		total += ticks - last_ticks;
-		count++;
-
-		last_ticks = ticks;
+	// Calculate latency for Performance.AUDIO_OUTPUT_LATENCY
+	if (OS::get_singleton()) {
+		uint64_t ticks = OS::get_singleton()->get_ticks_usec();
+		output_latency = (ticks - output_latency_ticks) / 1000000.f;
+		output_latency_ticks = ticks;
 	}
+
+#ifdef DEBUG_ENABLED
+	prof_time += OS::get_singleton()->get_ticks_usec() - prof_ticks;
 #endif
 }
 
@@ -318,6 +326,10 @@ void AudioServer::_mix_step() {
 				if (!bus->effects[j].enabled)
 					continue;
 
+#ifdef DEBUG_ENABLED
+				uint64_t ticks = OS::get_singleton()->get_ticks_usec();
+#endif
+
 				for (int k = 0; k < bus->channels.size(); k++) {
 
 					if (!bus->channels[k].active)
@@ -332,6 +344,10 @@ void AudioServer::_mix_step() {
 						continue;
 					SWAP(bus->channels[k].buffer, temp_buffer[k]);
 				}
+
+#ifdef DEBUG_ENABLED
+				bus->effects[j].prof_time += OS::get_singleton()->get_ticks_usec() - ticks;
+#endif
 			}
 		}
 
@@ -772,6 +788,9 @@ void AudioServer::add_bus_effect(int p_bus, const Ref<AudioEffect> &p_effect, in
 	fx.effect = p_effect;
 	//fx.instance=p_effect->instance();
 	fx.enabled = true;
+#ifdef DEBUG_ENABLED
+	fx.prof_time = 0;
+#endif
 
 	if (p_at_pos >= buses[p_bus]->effects.size() || p_at_pos < 0) {
 		buses[p_bus]->effects.push_back(fx);
@@ -884,8 +903,8 @@ void AudioServer::init_channels_and_buffers() {
 
 void AudioServer::init() {
 
-	channel_disable_threshold_db = GLOBAL_DEF("audio/channel_disable_threshold_db", -60.0);
-	channel_disable_frames = float(GLOBAL_DEF("audio/channel_disable_time", 2.0)) * get_mix_rate();
+	channel_disable_threshold_db = GLOBAL_DEF_RST("audio/channel_disable_threshold_db", -60.0);
+	channel_disable_frames = float(GLOBAL_DEF_RST("audio/channel_disable_time", 2.0)) * get_mix_rate();
 	buffer_size = 1024; //hardcoded for now
 
 	init_channels_and_buffers();
@@ -901,7 +920,69 @@ void AudioServer::init() {
 	set_edited(false); //avoid editors from thinking this was edited
 #endif
 
-	GLOBAL_DEF("audio/video_delay_compensation_ms", 0);
+	GLOBAL_DEF_RST("audio/video_delay_compensation_ms", 0);
+}
+
+void AudioServer::update() {
+#ifdef DEBUG_ENABLED
+	if (ScriptDebugger::get_singleton() && ScriptDebugger::get_singleton()->is_profiling()) {
+
+		// Driver time includes server time + effects times
+		// Server time includes effects times
+		uint64_t driver_time = AudioDriver::get_singleton()->get_profiling_time();
+		uint64_t server_time = prof_time;
+
+		// Substract the server time from the driver time
+		if (driver_time > server_time)
+			driver_time -= server_time;
+
+		Array values;
+
+		for (int i = buses.size() - 1; i >= 0; i--) {
+			Bus *bus = buses[i];
+			if (bus->bypass)
+				continue;
+
+			for (int j = 0; j < bus->effects.size(); j++) {
+				if (!bus->effects[j].enabled)
+					continue;
+
+				values.push_back(String(bus->name) + bus->effects[j].effect->get_name());
+				values.push_back(USEC_TO_SEC(bus->effects[j].prof_time));
+
+				// Substract the effect time from the driver and server times
+				if (driver_time > bus->effects[j].prof_time)
+					driver_time -= bus->effects[j].prof_time;
+				if (server_time > bus->effects[j].prof_time)
+					server_time -= bus->effects[j].prof_time;
+			}
+		}
+
+		values.push_back("audio_server");
+		values.push_back(USEC_TO_SEC(server_time));
+		values.push_back("audio_driver");
+		values.push_back(USEC_TO_SEC(driver_time));
+
+		ScriptDebugger::get_singleton()->add_profiling_frame_data("audio_thread", values);
+	}
+
+	// Reset profiling times
+	for (int i = buses.size() - 1; i >= 0; i--) {
+		Bus *bus = buses[i];
+		if (bus->bypass)
+			continue;
+
+		for (int j = 0; j < bus->effects.size(); j++) {
+			if (!bus->effects[j].enabled)
+				continue;
+
+			bus->effects[j].prof_time = 0;
+		}
+	}
+
+	AudioDriver::get_singleton()->reset_profiling_time();
+	prof_time = 0;
+#endif
 }
 
 void AudioServer::load_default_bus_layout() {
@@ -925,9 +1006,6 @@ void AudioServer::finish() {
 	}
 
 	buses.clear();
-}
-
-void AudioServer::update() {
 }
 
 /* MISC config */
@@ -1108,6 +1186,21 @@ Ref<AudioBusLayout> AudioServer::generate_bus_layout() const {
 	return state;
 }
 
+Array AudioServer::get_device_list() {
+
+	return AudioDriver::get_singleton()->get_device_list();
+}
+
+String AudioServer::get_device() {
+
+	return AudioDriver::get_singleton()->get_device();
+}
+
+void AudioServer::set_device(String device) {
+
+	AudioDriver::get_singleton()->set_device(device);
+}
+
 void AudioServer::_bind_methods() {
 
 	ClassDB::bind_method(D_METHOD("set_bus_count", "amount"), &AudioServer::set_bus_count);
@@ -1154,6 +1247,9 @@ void AudioServer::_bind_methods() {
 
 	ClassDB::bind_method(D_METHOD("get_speaker_mode"), &AudioServer::get_speaker_mode);
 	ClassDB::bind_method(D_METHOD("get_mix_rate"), &AudioServer::get_mix_rate);
+	ClassDB::bind_method(D_METHOD("get_device_list"), &AudioServer::get_device_list);
+	ClassDB::bind_method(D_METHOD("get_device"), &AudioServer::get_device);
+	ClassDB::bind_method(D_METHOD("set_device"), &AudioServer::set_device);
 
 	ClassDB::bind_method(D_METHOD("set_bus_layout", "bus_layout"), &AudioServer::set_bus_layout);
 	ClassDB::bind_method(D_METHOD("generate_bus_layout"), &AudioServer::generate_bus_layout);
@@ -1174,6 +1270,11 @@ AudioServer::AudioServer() {
 	mix_frames = 0;
 	channel_count = 0;
 	to_mix = 0;
+	output_latency = 0;
+	output_latency_ticks = 0;
+#ifdef DEBUG_ENABLED
+	prof_time = 0;
+#endif
 }
 
 AudioServer::~AudioServer() {

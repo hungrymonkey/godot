@@ -33,6 +33,7 @@
 #if defined(MBEDTLS_MD5_C)
 
 #include "mbedtls/md5.h"
+#include "mbedtls/platform_util.h"
 
 #include <string.h>
 
@@ -46,11 +47,6 @@
 #endif /* MBEDTLS_SELF_TEST */
 
 #if !defined(MBEDTLS_MD5_ALT)
-
-/* Implementation that should never be optimized out by the compiler */
-static void mbedtls_zeroize( void *v, size_t n ) {
-    volatile unsigned char *p = v; while( n-- ) *p++ = 0;
-}
 
 /*
  * 32-bit integer manipulation macros (little endian)
@@ -85,7 +81,7 @@ void mbedtls_md5_free( mbedtls_md5_context *ctx )
     if( ctx == NULL )
         return;
 
-    mbedtls_zeroize( ctx, sizeof( mbedtls_md5_context ) );
+    mbedtls_platform_zeroize( ctx, sizeof( mbedtls_md5_context ) );
 }
 
 void mbedtls_md5_clone( mbedtls_md5_context *dst,
@@ -109,6 +105,13 @@ int mbedtls_md5_starts_ret( mbedtls_md5_context *ctx )
 
     return( 0 );
 }
+
+#if !defined(MBEDTLS_DEPRECATED_REMOVED)
+void mbedtls_md5_starts( mbedtls_md5_context *ctx )
+{
+    mbedtls_md5_starts_ret( ctx );
+}
+#endif
 
 #if !defined(MBEDTLS_MD5_PROCESS_ALT)
 int mbedtls_internal_md5_process( mbedtls_md5_context *ctx,
@@ -236,6 +239,14 @@ int mbedtls_internal_md5_process( mbedtls_md5_context *ctx,
 
     return( 0 );
 }
+
+#if !defined(MBEDTLS_DEPRECATED_REMOVED)
+void mbedtls_md5_process( mbedtls_md5_context *ctx,
+                          const unsigned char data[64] )
+{
+    mbedtls_internal_md5_process( ctx, data );
+}
+#endif
 #endif /* !MBEDTLS_MD5_PROCESS_ALT */
 
 /*
@@ -289,6 +300,15 @@ int mbedtls_md5_update_ret( mbedtls_md5_context *ctx,
     return( 0 );
 }
 
+#if !defined(MBEDTLS_DEPRECATED_REMOVED)
+void mbedtls_md5_update( mbedtls_md5_context *ctx,
+                         const unsigned char *input,
+                         size_t ilen )
+{
+    mbedtls_md5_update_ret( ctx, input, ilen );
+}
+#endif
+
 static const unsigned char md5_padding[64] =
 {
  0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -332,6 +352,14 @@ int mbedtls_md5_finish_ret( mbedtls_md5_context *ctx,
     return( 0 );
 }
 
+#if !defined(MBEDTLS_DEPRECATED_REMOVED)
+void mbedtls_md5_finish( mbedtls_md5_context *ctx,
+                         unsigned char output[16] )
+{
+    mbedtls_md5_finish_ret( ctx, output );
+}
+#endif
+
 #endif /* !MBEDTLS_MD5_ALT */
 
 /*
@@ -360,6 +388,15 @@ exit:
 
     return( ret );
 }
+
+#if !defined(MBEDTLS_DEPRECATED_REMOVED)
+void mbedtls_md5( const unsigned char *input,
+                  size_t ilen,
+                  unsigned char output[16] )
+{
+    mbedtls_md5_ret( input, ilen, output );
+}
+#endif
 
 #if defined(MBEDTLS_SELF_TEST)
 /*

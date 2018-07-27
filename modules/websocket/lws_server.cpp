@@ -5,8 +5,8 @@
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
+/* Copyright (c) 2007-2018 Juan Linietsky, Ariel Manzur.                 */
+/* Copyright (c) 2014-2018 Godot Engine contributors (cf. AUTHORS.md)    */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -162,6 +162,24 @@ bool LWSServer::has_peer(int p_id) const {
 Ref<WebSocketPeer> LWSServer::get_peer(int p_id) const {
 	ERR_FAIL_COND_V(!has_peer(p_id), NULL);
 	return _peer_map[p_id];
+}
+
+IP_Address LWSServer::get_peer_address(int p_peer_id) const {
+	ERR_FAIL_COND_V(!has_peer(p_peer_id), IP_Address());
+
+	return _peer_map[p_peer_id]->get_connected_host();
+}
+
+int LWSServer::get_peer_port(int p_peer_id) const {
+	ERR_FAIL_COND_V(!has_peer(p_peer_id), 0);
+
+	return _peer_map[p_peer_id]->get_connected_port();
+}
+
+void LWSServer::disconnect_peer(int p_peer_id) {
+	ERR_FAIL_COND(!has_peer(p_peer_id));
+
+	get_peer(p_peer_id)->close();
 }
 
 LWSServer::LWSServer() {

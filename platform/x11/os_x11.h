@@ -116,6 +116,10 @@ class OS_X11 : public OS_Unix {
 	static void xim_destroy_callback(::XIM im, ::XPointer client_data,
 			::XPointer call_data);
 
+	// IME
+	bool im_active;
+	Vector2 im_position;
+
 	Point2i last_mouse_pos;
 	bool last_mouse_pos_valid;
 	Point2i last_click_pos;
@@ -127,6 +131,7 @@ class OS_X11 : public OS_Unix {
 		Vector<int> devices;
 		XIEventMask event_mask;
 		Map<int, Vector2> state;
+		Vector2 mouse_pos_to_filter;
 	} touch;
 #endif
 
@@ -171,8 +176,11 @@ class OS_X11 : public OS_Unix {
 
 	PowerX11 *power_manager;
 
+	bool layered_window;
+
 	CrashHandler crash_handler;
 
+	int video_driver_index;
 	int audio_driver_index;
 	unsigned int capture_idle;
 	bool maximized;
@@ -188,6 +196,8 @@ class OS_X11 : public OS_Unix {
 	Bool xrandr_ext_ok;
 
 protected:
+	virtual int get_current_video_driver() const;
+
 	virtual void initialize_core();
 	virtual Error initialize(const VideoMode &p_desired, int p_video_driver, int p_audio_driver);
 	virtual void finalize();
@@ -262,6 +272,11 @@ public:
 
 	virtual void set_borderless_window(bool p_borderless);
 	virtual bool get_borderless_window();
+
+	virtual bool get_window_per_pixel_transparency_enabled() const;
+	virtual void set_window_per_pixel_transparency_enabled(bool p_enabled);
+
+	virtual void set_ime_active(const bool p_active);
 	virtual void set_ime_position(const Point2 &p_pos);
 
 	virtual String get_unique_id() const;

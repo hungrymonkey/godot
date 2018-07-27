@@ -86,7 +86,7 @@ Variant *GDScriptFunction::_get_variant(int p_address, GDScriptInstance *p_insta
 				o = o->_owner;
 			}
 
-			ERR_EXPLAIN("GDScriptCompiler bug..");
+			ERR_EXPLAIN("GDScriptCompiler bug...");
 			ERR_FAIL_V(NULL);
 		} break;
 		case ADDR_TYPE_LOCAL_CONSTANT: {
@@ -108,6 +108,21 @@ Variant *GDScriptFunction::_get_variant(int p_address, GDScriptInstance *p_insta
 #endif
 			return &GDScriptLanguage::get_singleton()->get_global_array()[address];
 		} break;
+#ifdef TOOLS_ENABLED
+		case ADDR_TYPE_NAMED_GLOBAL: {
+#ifdef DEBUG_ENABLED
+			ERR_FAIL_INDEX_V(address, _named_globals_count, NULL);
+#endif
+			StringName id = _named_globals_ptr[address];
+
+			if (GDScriptLanguage::get_singleton()->get_named_globals_map().has(id)) {
+				return (Variant *)&GDScriptLanguage::get_singleton()->get_named_globals_map()[id];
+			} else {
+				r_error = "Autoload singleton '" + String(id) + "' has been removed.";
+				return NULL;
+			}
+		} break;
+#endif
 		case ADDR_TYPE_NIL: {
 			return &nil;
 		} break;
@@ -185,6 +200,12 @@ static String _get_var_type(const Variant *p_type) {
 		&&OPCODE_ASSIGN,                      \
 		&&OPCODE_ASSIGN_TRUE,                 \
 		&&OPCODE_ASSIGN_FALSE,                \
+		&&OPCODE_ASSIGN_TYPED_BUILTIN,        \
+		&&OPCODE_ASSIGN_TYPED_NATIVE,         \
+		&&OPCODE_ASSIGN_TYPED_SCRIPT,         \
+		&&OPCODE_CAST_TO_BUILTIN,             \
+		&&OPCODE_CAST_TO_NATIVE,              \
+		&&OPCODE_CAST_TO_SCRIPT,              \
 		&&OPCODE_CONSTRUCT,                   \
 		&&OPCODE_CONSTRUCT_ARRAY,             \
 		&&OPCODE_CONSTRUCT_DICTIONARY,        \
@@ -303,10 +324,28 @@ Variant GDScriptFunction::call(GDScriptInstance *p_instance, const Variant **p_a
 			if (_stack_size) {
 
 				stack = (Variant *)aptr;
-				for (int i = 0; i < p_argcount; i++)
-					memnew_placement(&stack[i], Variant(*p_args[i]));
-				for (int i = p_argcount; i < _stack_size; i++)
+				for (int i = 0; i < p_argcount; i++) {
+					if (!argument_types[i].has_type) {
+						memnew_placement(&stack[i], Variant(*p_args[i]));
+						continue;
+					}
+
+					if (!argument_types[i].is_type(*p_args[i], true)) {
+						r_err.error = Variant::CallError::CALL_ERROR_INVALID_ARGUMENT;
+						r_err.argument = i;
+						r_err.expected = argument_types[i].kind == GDScriptDataType::BUILTIN ? argument_types[i].builtin_type : Variant::OBJECT;
+						return Variant();
+					}
+					if (argument_types[i].kind == GDScriptDataType::BUILTIN) {
+						Variant arg = Variant::construct(argument_types[i].builtin_type, &p_args[i], 1, r_err);
+						memnew_placement(&stack[i], Variant(arg));
+					} else {
+						memnew_placement(&stack[i], Variant(*p_args[i]));
+					}
+				}
+				for (int i = p_argcount; i < _stack_size; i++) {
 					memnew_placement(&stack[i], Variant);
+				}
 			} else {
 				stack = NULL;
 			}
@@ -691,6 +730,199 @@ Variant GDScriptFunction::call(GDScriptInstance *p_instance, const Variant **p_a
 				*dst = false;
 
 				ip += 2;
+			}
+			DISPATCH_OPCODE;
+
+			OPCODE(OPCODE_ASSIGN_TYPED_BUILTIN) {
+
+				CHECK_SPACE(4);
+				Variant::Type var_type = (Variant::Type)_code_ptr[ip + 1];
+				GET_VARIANT_PTR(dst, 2);
+				GET_VARIANT_PTR(src, 3);
+
+				GD_ERR_BREAK(var_type < 0 || var_type >= Variant::VARIANT_MAX);
+
+				if (src->get_type() != var_type) {
+					err_text = "Trying to assign value of type '" + Variant::get_type_name(src->get_type()) +
+							   "' to a variable of type '" + Variant::get_type_name(var_type) + "'.";
+					OPCODE_BREAK;
+				}
+
+				*dst = *src;
+
+				ip += 4;
+			}
+			DISPATCH_OPCODE;
+
+			OPCODE(OPCODE_ASSIGN_TYPED_NATIVE) {
+
+				CHECK_SPACE(4);
+				GET_VARIANT_PTR(type, 1);
+				GET_VARIANT_PTR(dst, 2);
+				GET_VARIANT_PTR(src, 3);
+
+				GDScriptNativeClass *nc = Object::cast_to<GDScriptNativeClass>(type->operator Object *());
+				GD_ERR_BREAK(!nc);
+				Object *src_obj = src->operator Object *();
+				GD_ERR_BREAK(!src_obj);
+
+				if (!ClassDB::is_parent_class(src_obj->get_class_name(), nc->get_name())) {
+					err_text = "Trying to assign value of type '" + src_obj->get_class_name() +
+							   "' to a variable of type '" + nc->get_name() + "'.";
+					OPCODE_BREAK;
+				}
+
+				*dst = *src;
+
+				ip += 4;
+			}
+			DISPATCH_OPCODE;
+
+			OPCODE(OPCODE_ASSIGN_TYPED_SCRIPT) {
+
+				CHECK_SPACE(4);
+				GET_VARIANT_PTR(type, 1);
+				GET_VARIANT_PTR(dst, 2);
+				GET_VARIANT_PTR(src, 3);
+
+				Script *base_type = Object::cast_to<Script>(type->operator Object *());
+
+				GD_ERR_BREAK(!base_type);
+
+				if (src->get_type() != Variant::OBJECT && src->get_type() != Variant::NIL) {
+					err_text = "Trying to assign a non-object value to a variable of type '" + base_type->get_path().get_file() + "'.";
+					OPCODE_BREAK;
+				}
+
+				if (src->get_type() != Variant::NIL && src->operator Object *() != NULL) {
+
+					ScriptInstance *scr_inst = src->operator Object *()->get_script_instance();
+					if (!scr_inst) {
+						err_text = "Trying to assign value of type '" + src->operator Object *()->get_class_name() +
+								   "' to a variable of type '" + base_type->get_path().get_file() + "'.";
+						OPCODE_BREAK;
+					}
+
+					Script *src_type = src->operator Object *()->get_script_instance()->get_script().ptr();
+					bool valid = false;
+
+					while (src_type) {
+						if (src_type == base_type) {
+							valid = true;
+							break;
+						}
+						src_type = src_type->get_base_script().ptr();
+					}
+
+					if (!valid) {
+						err_text = "Trying to assign value of type '" + src->operator Object *()->get_script_instance()->get_script()->get_path().get_file() +
+								   "' to a variable of type '" + base_type->get_path().get_file() + "'.";
+						OPCODE_BREAK;
+					}
+				}
+
+				*dst = *src;
+
+				ip += 4;
+			}
+			DISPATCH_OPCODE;
+
+			OPCODE(OPCODE_CAST_TO_BUILTIN) {
+
+				CHECK_SPACE(4);
+				Variant::Type to_type = (Variant::Type)_code_ptr[ip + 1];
+				GET_VARIANT_PTR(src, 2);
+				GET_VARIANT_PTR(dst, 3);
+
+				GD_ERR_BREAK(to_type < 0 || to_type >= Variant::VARIANT_MAX);
+
+				Variant::CallError err;
+				*dst = Variant::construct(to_type, (const Variant **)&src, 1, err);
+
+#ifdef DEBUG_ENABLED
+				if (err.error != Variant::CallError::CALL_OK) {
+					err_text = "Invalid cast: could not convert value to '" + Variant::get_type_name(to_type) + "'.";
+					OPCODE_BREAK;
+				}
+#endif
+
+				ip += 4;
+			}
+			DISPATCH_OPCODE;
+
+			OPCODE(OPCODE_CAST_TO_NATIVE) {
+
+				CHECK_SPACE(4);
+				GET_VARIANT_PTR(to_type, 1);
+				GET_VARIANT_PTR(src, 2);
+				GET_VARIANT_PTR(dst, 3);
+
+				GDScriptNativeClass *nc = Object::cast_to<GDScriptNativeClass>(to_type->operator Object *());
+				GD_ERR_BREAK(!nc);
+
+#ifdef DEBUG_ENABLED
+				if (src->get_type() != Variant::OBJECT && src->get_type() != Variant::NIL) {
+					err_text = "Invalid cast: can't convert a non-object value to an object type.";
+					OPCODE_BREAK;
+				}
+#endif
+				Object *src_obj = src->operator Object *();
+
+				if (src_obj && !ClassDB::is_parent_class(src_obj->get_class_name(), nc->get_name())) {
+					*dst = Variant(); // invalid cast, assign NULL
+				} else {
+					*dst = *src;
+				}
+
+				ip += 4;
+			}
+			DISPATCH_OPCODE;
+
+			OPCODE(OPCODE_CAST_TO_SCRIPT) {
+
+				CHECK_SPACE(4);
+				GET_VARIANT_PTR(to_type, 1);
+				GET_VARIANT_PTR(src, 2);
+				GET_VARIANT_PTR(dst, 3);
+
+				Script *base_type = Object::cast_to<Script>(to_type->operator Object *());
+
+				GD_ERR_BREAK(!base_type);
+
+#ifdef DEBUG_ENABLED
+				if (src->get_type() != Variant::OBJECT && src->get_type() != Variant::NIL) {
+					err_text = "Trying to assign a non-object value to a variable of type '" + base_type->get_path().get_file() + "'.";
+					OPCODE_BREAK;
+				}
+#endif
+
+				bool valid = false;
+
+				if (src->get_type() != Variant::NIL && src->operator Object *() != NULL) {
+
+					ScriptInstance *scr_inst = src->operator Object *()->get_script_instance();
+
+					if (scr_inst) {
+
+						Script *src_type = src->operator Object *()->get_script_instance()->get_script().ptr();
+
+						while (src_type) {
+							if (src_type == base_type) {
+								valid = true;
+								break;
+							}
+							src_type = src_type->get_base_script().ptr();
+						}
+					}
+				}
+
+				if (valid) {
+					*dst = *src; // Valid cast, copy the source object
+				} else {
+					*dst = Variant(); // invalid cast, assign NULL
+				}
+
+				ip += 4;
 			}
 			DISPATCH_OPCODE;
 
@@ -1311,9 +1543,9 @@ Variant GDScriptFunction::call(GDScriptInstance *p_instance, const Variant **p_a
 		GDScriptLanguage::get_singleton()->script_frame_time += time_taken - function_call_time;
 	}
 
-#endif
 	if (ScriptDebugger::get_singleton())
 		GDScriptLanguage::get_singleton()->exit_function();
+#endif
 
 	if (_stack_size) {
 		//free stack
@@ -1353,6 +1585,15 @@ int GDScriptFunction::get_default_argument_addr(int p_idx) const {
 
 	ERR_FAIL_INDEX_V(p_idx, default_arguments.size(), -1);
 	return default_arguments[p_idx];
+}
+
+GDScriptDataType GDScriptFunction::get_return_type() const {
+	return return_type;
+}
+
+GDScriptDataType GDScriptFunction::get_argument_type(int p_idx) const {
+	ERR_FAIL_INDEX_V(p_idx, argument_types.size(), GDScriptDataType());
+	return argument_types[p_idx];
 }
 
 StringName GDScriptFunction::get_name() const {
@@ -1440,7 +1681,7 @@ GDScriptFunction::GDScriptFunction() :
 
 	_stack_size = 0;
 	_call_size = 0;
-	rpc_mode = ScriptInstance::RPC_MODE_DISABLED;
+	rpc_mode = MultiplayerAPI::RPC_MODE_DISABLED;
 	name = "<anonymous>";
 #ifdef DEBUG_ENABLED
 	_func_cname = NULL;
@@ -1537,7 +1778,7 @@ Variant GDScriptFunctionState::_signal_callback(const Variant **p_args, int p_ar
 		GDScriptFunctionState *gdfs = Object::cast_to<GDScriptFunctionState>(ret);
 		if (gdfs && gdfs->function == function) {
 			completed = false;
-			gdfs->previous_state = Ref<GDScriptFunctionState>(this);
+			gdfs->first_state = first_state.is_valid() ? first_state : Ref<GDScriptFunctionState>(this);
 		}
 	}
 
@@ -1545,10 +1786,10 @@ Variant GDScriptFunctionState::_signal_callback(const Variant **p_args, int p_ar
 	state.result = Variant();
 
 	if (completed) {
-		GDScriptFunctionState *state = this;
-		while (state != NULL) {
-			state->emit_signal("completed", ret);
-			state = *(state->previous_state);
+		if (first_state.is_valid()) {
+			first_state->emit_signal("completed", ret);
+		} else {
+			emit_signal("completed", ret);
 		}
 	}
 
@@ -1599,7 +1840,7 @@ Variant GDScriptFunctionState::resume(const Variant &p_arg) {
 		GDScriptFunctionState *gdfs = Object::cast_to<GDScriptFunctionState>(ret);
 		if (gdfs && gdfs->function == function) {
 			completed = false;
-			gdfs->previous_state = Ref<GDScriptFunctionState>(this);
+			gdfs->first_state = first_state.is_valid() ? first_state : Ref<GDScriptFunctionState>(this);
 		}
 	}
 
@@ -1607,10 +1848,10 @@ Variant GDScriptFunctionState::resume(const Variant &p_arg) {
 	state.result = Variant();
 
 	if (completed) {
-		GDScriptFunctionState *state = this;
-		while (state != NULL) {
-			state->emit_signal("completed", ret);
-			state = *(state->previous_state);
+		if (first_state.is_valid()) {
+			first_state->emit_signal("completed", ret);
+		} else {
+			emit_signal("completed", ret);
 		}
 	}
 

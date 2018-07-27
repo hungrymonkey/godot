@@ -5,8 +5,8 @@
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
+/* Copyright (c) 2007-2018 Juan Linietsky, Ariel Manzur.                 */
+/* Copyright (c) 2014-2018 Godot Engine contributors (cf. AUTHORS.md)    */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -182,6 +182,8 @@ public:
 
 		Ref<Image> images[6];
 
+		bool redraw_if_visible;
+
 		Texture() {
 			flags = 0;
 			width = 0;
@@ -205,6 +207,8 @@ public:
 			proxy = NULL;
 
 			render_target = NULL;
+
+			redraw_if_visible = false;
 		}
 
 		_ALWAYS_INLINE_ Texture *get_ptr() {
@@ -237,6 +241,7 @@ public:
 	virtual RID texture_create();
 	virtual void texture_allocate(RID p_texture, int p_width, int p_height, Image::Format p_format, uint32_t p_flags = VS::TEXTURE_FLAGS_DEFAULT);
 	virtual void texture_set_data(RID p_texture, const Ref<Image> &p_image, VS::CubeMapSide p_cube_side = VS::CUBEMAP_LEFT);
+	virtual void texture_set_data_partial(RID p_texture, const Ref<Image> &p_image, int src_x, int src_y, int src_w, int src_h, int dst_x, int dst_y, int p_dst_mip, VS::CubeMapSide p_cube_side = VS::CUBEMAP_LEFT);
 	virtual Ref<Image> texture_get_data(RID p_texture, VS::CubeMapSide p_cube_side = VS::CUBEMAP_LEFT) const;
 	virtual void texture_set_flags(RID p_texture, uint32_t p_flags);
 	virtual uint32_t texture_get_flags(RID p_texture) const;
@@ -262,6 +267,8 @@ public:
 	virtual void texture_set_detect_3d_callback(RID p_texture, VisualServer::TextureDetectCallback p_callback, void *p_userdata);
 	virtual void texture_set_detect_srgb_callback(RID p_texture, VisualServer::TextureDetectCallback p_callback, void *p_userdata);
 	virtual void texture_set_detect_normal_callback(RID p_texture, VisualServer::TextureDetectCallback p_callback, void *p_userdata);
+
+	virtual void texture_set_force_redraw_if_visible(RID p_texture, bool p_enable);
 
 	/* SKY API */
 
@@ -507,19 +514,23 @@ public:
 
 	virtual RID multimesh_create();
 
-	virtual void multimesh_allocate(RID p_multimesh, int p_instances, VS::MultimeshTransformFormat p_transform_format, VS::MultimeshColorFormat p_color_format);
+	virtual void multimesh_allocate(RID p_multimesh, int p_instances, VS::MultimeshTransformFormat p_transform_format, VS::MultimeshColorFormat p_color_format, VS::MultimeshCustomDataFormat p_data = VS::MULTIMESH_CUSTOM_DATA_NONE);
 	virtual int multimesh_get_instance_count(RID p_multimesh) const;
 
 	virtual void multimesh_set_mesh(RID p_multimesh, RID p_mesh);
 	virtual void multimesh_instance_set_transform(RID p_multimesh, int p_index, const Transform &p_transform);
 	virtual void multimesh_instance_set_transform_2d(RID p_multimesh, int p_index, const Transform2D &p_transform);
 	virtual void multimesh_instance_set_color(RID p_multimesh, int p_index, const Color &p_color);
+	virtual void multimesh_instance_set_custom_data(RID p_multimesh, int p_index, const Color &p_color);
 
 	virtual RID multimesh_get_mesh(RID p_multimesh) const;
 
 	virtual Transform multimesh_instance_get_transform(RID p_multimesh, int p_index) const;
 	virtual Transform2D multimesh_instance_get_transform_2d(RID p_multimesh, int p_index) const;
 	virtual Color multimesh_instance_get_color(RID p_multimesh, int p_index) const;
+	virtual Color multimesh_instance_get_custom_data(RID p_multimesh, int p_index) const;
+
+	virtual void multimesh_set_as_bulk_array(RID p_multimesh, const PoolVector<float> &p_array);
 
 	virtual void multimesh_set_visible_instances(RID p_multimesh, int p_visible);
 	virtual int multimesh_get_visible_instances(RID p_multimesh) const;
@@ -555,6 +566,7 @@ public:
 	virtual Transform skeleton_bone_get_transform(RID p_skeleton, int p_bone) const;
 	virtual void skeleton_bone_set_transform_2d(RID p_skeleton, int p_bone, const Transform2D &p_transform);
 	virtual Transform2D skeleton_bone_get_transform_2d(RID p_skeleton, int p_bone) const;
+	virtual void skeleton_set_base_transform_2d(RID p_skeleton, const Transform2D &p_base_transform);
 
 	/* Light API */
 

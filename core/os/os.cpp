@@ -411,7 +411,7 @@ Error OS::set_cwd(const String &p_cwd) {
 bool OS::has_touchscreen_ui_hint() const {
 
 	//return false;
-	return Input::get_singleton() && Input::get_singleton()->is_emulating_touchscreen();
+	return Input::get_singleton() && Input::get_singleton()->is_emulating_touch_from_mouse();
 }
 
 int OS::get_free_static_memory() const {
@@ -614,6 +614,9 @@ bool OS::has_feature(const String &p_feature) {
 	if (_check_internal_feature_support(p_feature))
 		return true;
 
+	if (ProjectSettings::get_singleton()->has_custom_feature(p_feature))
+		return true;
+
 	return false;
 }
 
@@ -656,9 +659,23 @@ const char *OS::get_audio_driver_name(int p_driver) const {
 	return AudioDriverManager::get_driver(p_driver)->get_name();
 }
 
+void OS::set_restart_on_exit(bool p_restart, const List<String> &p_restart_arguments) {
+	restart_on_exit = p_restart;
+	restart_commandline = p_restart_arguments;
+}
+
+bool OS::is_restart_on_exit_set() const {
+	return restart_on_exit;
+}
+
+List<String> OS::get_restart_on_exit_arguments() const {
+	return restart_commandline;
+}
+
 OS::OS() {
 	void *volatile stack_bottom;
 
+	restart_on_exit = false;
 	last_error = NULL;
 	singleton = this;
 	_keep_screen_on = true; // set default value to true, because this had been true before godot 2.0.
@@ -672,6 +689,7 @@ OS::OS() {
 	_render_thread_mode = RENDER_THREAD_SAFE;
 
 	_allow_hidpi = false;
+	_allow_layered = false;
 	_stack_bottom = (void *)(&stack_bottom);
 
 	_logger = NULL;

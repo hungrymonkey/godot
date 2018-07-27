@@ -73,6 +73,23 @@ void OS_Unix::debug_break() {
 	assert(false);
 };
 
+static void handle_interrupt(int sig) {
+	if (ScriptDebugger::get_singleton() == NULL)
+		return;
+
+	ScriptDebugger::get_singleton()->set_depth(-1);
+	ScriptDebugger::get_singleton()->set_lines_left(1);
+}
+
+void OS_Unix::initialize_debugging() {
+
+	if (ScriptDebugger::get_singleton() != NULL) {
+		struct sigaction action;
+		action.sa_handler = handle_interrupt;
+		sigaction(SIGINT, &action, NULL);
+	}
+}
+
 int OS_Unix::unix_initialize_audio(int p_audio_driver) {
 
 	return 0;
@@ -89,10 +106,11 @@ void handle_sigchld(int sig) {
 
 void OS_Unix::initialize_core() {
 
-#ifdef NO_PTHREADS
+#ifdef NO_THREADS
 	ThreadDummy::make_default();
 	SemaphoreDummy::make_default();
 	MutexDummy::make_default();
+	RWLockDummy::make_default();
 #else
 	ThreadPosix::make_default();
 	SemaphorePosix::make_default();
@@ -226,7 +244,7 @@ OS::TimeZoneInfo OS_Unix::get_time_zone_info() const {
 
 void OS_Unix::delay_usec(uint32_t p_usec) const {
 
-	struct timespec rem = { p_usec / 1000000, (p_usec % 1000000) * 1000 };
+	struct timespec rem = { static_cast<time_t>(p_usec / 1000000), static_cast<long>((p_usec % 1000000) * 1000) };
 	while (nanosleep(&rem, &rem) == EINTR) {
 	}
 }
@@ -347,6 +365,12 @@ String OS_Unix::get_locale() const {
 Error OS_Unix::open_dynamic_library(const String p_path, void *&p_library_handle, bool p_also_set_library_path) {
 
 	String path = p_path;
+
+	if (FileAccess::exists(path) && path.is_rel_path()) {
+		// dlopen expects a slash, in this case a leading ./ for it to be interpreted as a relative path,
+		//  otherwise it will end up searching various system directories for the lib instead and finally failing.
+		path = "./" + path;
+	}
 
 	if (!FileAccess::exists(path)) {
 		//this code exists so gdnative can load .so files from within the executable path

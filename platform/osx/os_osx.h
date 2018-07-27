@@ -99,14 +99,17 @@ public:
 	id pixelFormat;
 	id context;
 
+	bool layered_window;
+
 	CursorShape cursor_shape;
-	NSCursor *cursors[CURSOR_MAX] = { NULL };
+	NSCursor *cursors[CURSOR_MAX];
 	MouseMode mouse_mode;
 
 	String title;
 	bool minimized;
 	bool maximized;
 	bool zoomed;
+	bool resizable;
 
 	Size2 window_size;
 	Rect2 restore_rect;
@@ -114,6 +117,7 @@ public:
 	String open_with_filename;
 
 	Point2 im_position;
+	bool im_active;
 	ImeCallback im_callback;
 	void *im_target;
 
@@ -132,6 +136,9 @@ public:
 	float _display_scale(id screen) const;
 
 	void _update_window();
+
+	int video_driver_index;
+	virtual int get_current_video_driver() const;
 
 protected:
 	virtual void initialize_core();
@@ -195,7 +202,6 @@ public:
 	virtual VideoMode get_video_mode(int p_screen = 0) const;
 	virtual void get_fullscreen_mode_list(List<VideoMode> *p_list, int p_screen = 0) const;
 
-	virtual Error execute(const String &p_path, const List<String> &p_arguments, bool p_blocking, ProcessID *r_child_id, String *r_pipe, int *r_exitcode, bool p_read_stderr);
 	virtual String get_executable_path() const;
 
 	virtual LatinKeyboardVariant get_latin_keyboard_variant() const;
@@ -227,6 +233,11 @@ public:
 
 	virtual void set_borderless_window(bool p_borderless);
 	virtual bool get_borderless_window();
+
+	virtual bool get_window_per_pixel_transparency_enabled() const;
+	virtual void set_window_per_pixel_transparency_enabled(bool p_enabled);
+
+	virtual void set_ime_active(const bool p_active);
 	virtual void set_ime_position(const Point2 &p_pos);
 	virtual void set_ime_intermediate_text_callback(ImeCallback p_callback, void *p_inp);
 

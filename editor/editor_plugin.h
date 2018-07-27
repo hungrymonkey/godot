@@ -31,8 +31,10 @@
 #ifndef EDITOR_PLUGIN_H
 #define EDITOR_PLUGIN_H
 
+#include "editor/editor_inspector.h"
 #include "editor/import/editor_import_plugin.h"
 #include "editor/import/resource_importer_scene.h"
+#include "editor/script_create_dialog.h"
 #include "io/config_file.h"
 #include "scene/gui/tool_button.h"
 #include "scene/main/node.h"
@@ -167,6 +169,7 @@ public:
 	void notify_main_screen_changed(const String &screen_name);
 	void notify_scene_changed(const Node *scn_root);
 	void notify_scene_closed(const String &scene_filepath);
+	void notify_resource_saved(const Ref<Resource> &p_resource);
 
 	virtual Ref<SpatialEditorGizmo> create_spatial_gizmo(Spatial *p_spatial);
 	virtual bool forward_canvas_gui_input(const Ref<InputEvent> &p_event);
@@ -190,8 +193,10 @@ public:
 	virtual void set_window_layout(Ref<ConfigFile> p_layout);
 	virtual void get_window_layout(Ref<ConfigFile> p_layout);
 	virtual void edited_scene_changed() {} // if changes are pending in editor, apply them
+	virtual bool build(); // builds with external tools. Returns true if safe to continue running scene.
 
 	EditorInterface *get_editor_interface();
+	ScriptCreateDialog *get_script_create_dialog();
 
 	int update_overlays() const;
 
@@ -208,6 +213,9 @@ public:
 
 	void add_export_plugin(const Ref<EditorExportPlugin> &p_exporter);
 	void remove_export_plugin(const Ref<EditorExportPlugin> &p_exporter);
+
+	void add_inspector_plugin(const Ref<EditorInspectorPlugin> &p_plugin);
+	void remove_inspector_plugin(const Ref<EditorInspectorPlugin> &p_plugin);
 
 	void add_scene_import_plugin(const Ref<EditorSceneImporter> &p_importer);
 	void remove_scene_import_plugin(const Ref<EditorSceneImporter> &p_importer);

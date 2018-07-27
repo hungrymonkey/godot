@@ -111,7 +111,7 @@ class CSharpScript : public Script {
 
 	void _clear();
 
-	bool _update_signals();
+	void load_script_signals(GDMonoClass *p_class, GDMonoClass *p_native_class);
 	bool _get_signal(GDMonoClass *p_class, GDMonoClass *p_delegate, Vector<Argument> &params);
 
 	bool _update_exports();
@@ -149,7 +149,6 @@ public:
 
 	virtual bool has_script_signal(const StringName &p_signal) const;
 	virtual void get_script_signal_list(List<MethodInfo> *r_signals) const;
-	virtual void update_signals();
 
 	/* TODO */ virtual bool get_property_default_value(const StringName &p_property, Variant &r_value) const;
 	virtual void get_script_property_list(List<PropertyInfo> *p_list) const;
@@ -192,7 +191,7 @@ class CSharpInstance : public ScriptInstance {
 
 	void _call_multilevel(MonoObject *p_mono_object, const StringName &p_method, const Variant **p_args, int p_argcount);
 
-	RPCMode _member_get_rpc_mode(GDMonoClassMember *p_member) const;
+	MultiplayerAPI::RPCMode _member_get_rpc_mode(GDMonoClassMember *p_member) const;
 
 public:
 	MonoObject *get_mono_object() const;
@@ -213,8 +212,8 @@ public:
 	virtual void refcount_incremented();
 	virtual bool refcount_decremented();
 
-	virtual RPCMode get_rpc_mode(const StringName &p_method) const;
-	virtual RPCMode get_rset_mode(const StringName &p_variable) const;
+	virtual MultiplayerAPI::RPCMode get_rpc_mode(const StringName &p_method) const;
+	virtual MultiplayerAPI::RPCMode get_rset_mode(const StringName &p_variable) const;
 
 	virtual void notification(int p_notification);
 	void call_notification_no_check(MonoObject *p_mono_object, int p_notification);
@@ -293,7 +292,7 @@ public:
 	virtual Ref<Script> get_template(const String &p_class_name, const String &p_base_class_name) const;
 	virtual bool is_using_templates();
 	virtual void make_template(const String &p_class_name, const String &p_base_class_name, Ref<Script> &p_script);
-	/* TODO */ virtual bool validate(const String &p_script, int &r_line_error, int &r_col_error, String &r_test_error, const String &p_path, List<String> *r_functions) const { return true; }
+	/* TODO */ virtual bool validate(const String &p_script, int &r_line_error, int &r_col_error, String &r_test_error, const String &p_path, List<String> *r_functions, Set<int> *r_safe_lines = NULL) const { return true; }
 	virtual String validate_path(const String &p_path) const;
 	virtual Script *create_script() const;
 	virtual bool has_named_classes() const;

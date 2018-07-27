@@ -33,6 +33,7 @@
 #if defined(MBEDTLS_SHA1_C)
 
 #include "mbedtls/sha1.h"
+#include "mbedtls/platform_util.h"
 
 #include <string.h>
 
@@ -46,11 +47,6 @@
 #endif /* MBEDTLS_SELF_TEST */
 
 #if !defined(MBEDTLS_SHA1_ALT)
-
-/* Implementation that should never be optimized out by the compiler */
-static void mbedtls_zeroize( void *v, size_t n ) {
-    volatile unsigned char *p = (unsigned char*)v; while( n-- ) *p++ = 0;
-}
 
 /*
  * 32-bit integer manipulation macros (big endian)
@@ -85,7 +81,7 @@ void mbedtls_sha1_free( mbedtls_sha1_context *ctx )
     if( ctx == NULL )
         return;
 
-    mbedtls_zeroize( ctx, sizeof( mbedtls_sha1_context ) );
+    mbedtls_platform_zeroize( ctx, sizeof( mbedtls_sha1_context ) );
 }
 
 void mbedtls_sha1_clone( mbedtls_sha1_context *dst,
@@ -110,6 +106,13 @@ int mbedtls_sha1_starts_ret( mbedtls_sha1_context *ctx )
 
     return( 0 );
 }
+
+#if !defined(MBEDTLS_DEPRECATED_REMOVED)
+void mbedtls_sha1_starts( mbedtls_sha1_context *ctx )
+{
+    mbedtls_sha1_starts_ret( ctx );
+}
+#endif
 
 #if !defined(MBEDTLS_SHA1_PROCESS_ALT)
 int mbedtls_internal_sha1_process( mbedtls_sha1_context *ctx,
@@ -270,6 +273,14 @@ int mbedtls_internal_sha1_process( mbedtls_sha1_context *ctx,
 
     return( 0 );
 }
+
+#if !defined(MBEDTLS_DEPRECATED_REMOVED)
+void mbedtls_sha1_process( mbedtls_sha1_context *ctx,
+                           const unsigned char data[64] )
+{
+    mbedtls_internal_sha1_process( ctx, data );
+}
+#endif
 #endif /* !MBEDTLS_SHA1_PROCESS_ALT */
 
 /*
@@ -322,6 +333,15 @@ int mbedtls_sha1_update_ret( mbedtls_sha1_context *ctx,
     return( 0 );
 }
 
+#if !defined(MBEDTLS_DEPRECATED_REMOVED)
+void mbedtls_sha1_update( mbedtls_sha1_context *ctx,
+                          const unsigned char *input,
+                          size_t ilen )
+{
+    mbedtls_sha1_update_ret( ctx, input, ilen );
+}
+#endif
+
 static const unsigned char sha1_padding[64] =
 {
  0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -365,6 +385,14 @@ int mbedtls_sha1_finish_ret( mbedtls_sha1_context *ctx,
     return( 0 );
 }
 
+#if !defined(MBEDTLS_DEPRECATED_REMOVED)
+void mbedtls_sha1_finish( mbedtls_sha1_context *ctx,
+                          unsigned char output[20] )
+{
+    mbedtls_sha1_finish_ret( ctx, output );
+}
+#endif
+
 #endif /* !MBEDTLS_SHA1_ALT */
 
 /*
@@ -393,6 +421,15 @@ exit:
 
     return( ret );
 }
+
+#if !defined(MBEDTLS_DEPRECATED_REMOVED)
+void mbedtls_sha1( const unsigned char *input,
+                   size_t ilen,
+                   unsigned char output[20] )
+{
+    mbedtls_sha1_ret( input, ilen, output );
+}
+#endif
 
 #if defined(MBEDTLS_SELF_TEST)
 /*

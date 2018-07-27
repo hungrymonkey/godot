@@ -137,7 +137,7 @@ class VisualScriptEditor : public ScriptEditorBase {
 		Vector<Pair<Variant::Type, String> > args;
 	};
 
-	HashMap<StringName, Ref<StyleBox>, StringNameHasher> node_styles;
+	HashMap<StringName, Ref<StyleBox> > node_styles;
 	StringName edited_func;
 
 	void _update_graph_connections();
@@ -246,6 +246,9 @@ protected:
 	static void _bind_methods();
 
 public:
+	virtual void add_syntax_highlighter(SyntaxHighlighter *p_highlighter);
+	virtual void set_syntax_highlighter(SyntaxHighlighter *p_highlighter);
+
 	virtual void apply_code();
 	virtual Ref<Script> get_edited_script() const;
 	virtual Vector<String> get_functions();

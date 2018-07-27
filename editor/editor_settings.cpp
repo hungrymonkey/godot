@@ -165,6 +165,7 @@ struct _EVCSort {
 	Variant::Type type;
 	int order;
 	bool save;
+	bool restart_if_changed;
 
 	bool operator<(const _EVCSort &p_vcs) const { return order < p_vcs.order; }
 };
@@ -188,6 +189,7 @@ void EditorSettings::_get_property_list(List<PropertyInfo> *p_list) const {
 		vc.order = v->order;
 		vc.type = v->variant.get_type();
 		vc.save = v->save;
+		vc.restart_if_changed = v->restart_if_changed;
 
 		vclist.insert(vc);
 	}
@@ -209,6 +211,10 @@ void EditorSettings::_get_property_list(List<PropertyInfo> *p_list) const {
 		pi.usage = pinfo;
 		if (hints.has(E->get().name))
 			pi = hints[E->get().name];
+
+		if (E->get().restart_if_changed) {
+			pi.usage |= PROPERTY_USAGE_RESTART_IF_CHANGED;
+		}
 
 		p_list->push_back(pi);
 	}
@@ -280,11 +286,14 @@ void EditorSettings::_load_defaults(Ref<ConfigFile> p_extra_config) {
 		}
 
 		_initial_set("interface/editor/editor_language", best);
+		set_restart_if_changed("interface/editor/editor_language", true);
 		hints["interface/editor/editor_language"] = PropertyInfo(Variant::STRING, "interface/editor/editor_language", PROPERTY_HINT_ENUM, lang_hint, PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_RESTART_IF_CHANGED);
 	}
 
-	_initial_set("interface/editor/hidpi_mode", 0);
-	hints["interface/editor/hidpi_mode"] = PropertyInfo(Variant::INT, "interface/editor/hidpi_mode", PROPERTY_HINT_ENUM, "Auto,VeryLoDPI,LoDPI,MidDPI,HiDPI", PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_RESTART_IF_CHANGED);
+	_initial_set("interface/editor/display_scale", 0);
+	hints["interface/editor/display_scale"] = PropertyInfo(Variant::INT, "interface/editor/display_scale", PROPERTY_HINT_ENUM, "Auto,75%,100%,125%,150%,175%,200%,Custom", PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_RESTART_IF_CHANGED);
+	_initial_set("interface/editor/custom_display_scale", 1.0f);
+	hints["interface/editor/custom_display_scale"] = PropertyInfo(Variant::REAL, "interface/editor/custom_display_scale", PROPERTY_HINT_RANGE, "0.75,3,0.01", PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_RESTART_IF_CHANGED);
 	_initial_set("interface/scene_tabs/show_script_button", false);
 	_initial_set("interface/editor/main_font_size", 14);
 	hints["interface/editor/main_font_size"] = PropertyInfo(Variant::INT, "interface/editor/main_font_size", PROPERTY_HINT_RANGE, "10,40,1", PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_RESTART_IF_CHANGED);
@@ -296,6 +305,8 @@ void EditorSettings::_load_defaults(Ref<ConfigFile> p_extra_config) {
 	hints["interface/editor/code_font_hinting"] = PropertyInfo(Variant::INT, "interface/editor/code_font_hinting", PROPERTY_HINT_ENUM, "None,Light,Normal", PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_RESTART_IF_CHANGED);
 	_initial_set("interface/editor/main_font", "");
 	hints["interface/editor/main_font"] = PropertyInfo(Variant::STRING, "interface/editor/main_font", PROPERTY_HINT_GLOBAL_FILE, "*.ttf,*.otf", PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_RESTART_IF_CHANGED);
+	_initial_set("interface/editor/main_font_bold", "");
+	hints["interface/editor/main_font_bold"] = PropertyInfo(Variant::STRING, "interface/editor/main_font_bold", PROPERTY_HINT_GLOBAL_FILE, "*.ttf,*.otf", PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_RESTART_IF_CHANGED);
 	_initial_set("interface/editor/code_font", "");
 	hints["interface/editor/code_font"] = PropertyInfo(Variant::STRING, "interface/editor/code_font", PROPERTY_HINT_GLOBAL_FILE, "*.ttf,*.otf", PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_RESTART_IF_CHANGED);
 	_initial_set("interface/editor/dim_editor_on_dialog_popup", true);
@@ -309,8 +320,8 @@ void EditorSettings::_load_defaults(Ref<ConfigFile> p_extra_config) {
 	_initial_set("interface/editor/save_each_scene_on_quit", true); // Regression
 	_initial_set("interface/editor/quit_confirmation", true);
 
-	_initial_set("interface/theme/preset", 0);
-	hints["interface/theme/preset"] = PropertyInfo(Variant::INT, "interface/theme/preset", PROPERTY_HINT_ENUM, "Default,Grey,Godot 2,Arc,Light,Alien,Custom", PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_RESTART_IF_CHANGED);
+	_initial_set("interface/theme/preset", "Default");
+	hints["interface/theme/preset"] = PropertyInfo(Variant::STRING, "interface/theme/preset", PROPERTY_HINT_ENUM, "Default,Alien,Arc,Godot 2,Grey,Light,Solarized (Dark),Solarized (Light),Custom", PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_RESTART_IF_CHANGED);
 	_initial_set("interface/theme/icon_and_font_color", 0);
 	hints["interface/theme/icon_and_font_color"] = PropertyInfo(Variant::INT, "interface/theme/icon_and_font_color", PROPERTY_HINT_ENUM, "Auto,Dark,Light", PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_RESTART_IF_CHANGED);
 	_initial_set("interface/theme/base_color", Color::html("#323b4f"));
@@ -353,6 +364,7 @@ void EditorSettings::_load_defaults(Ref<ConfigFile> p_extra_config) {
 
 	_initial_set("text_editor/highlighting/highlight_all_occurrences", true);
 	_initial_set("text_editor/highlighting/highlight_current_line", true);
+	_initial_set("text_editor/highlighting/highlight_type_safe_lines", true);
 	_initial_set("text_editor/cursor/scroll_past_end_of_file", false);
 
 	_initial_set("text_editor/indent/type", 0);
@@ -367,9 +379,10 @@ void EditorSettings::_load_defaults(Ref<ConfigFile> p_extra_config) {
 	_initial_set("text_editor/line_numbers/line_numbers_zero_padded", false);
 	_initial_set("text_editor/line_numbers/show_breakpoint_gutter", true);
 	_initial_set("text_editor/line_numbers/code_folding", true);
+	_initial_set("text_editor/line_numbers/word_wrap", false);
 	_initial_set("text_editor/line_numbers/show_line_length_guideline", false);
 	_initial_set("text_editor/line_numbers/line_length_guideline_column", 80);
-	hints["text_editor/line_numbers/line_length_guideline_column"] = PropertyInfo(Variant::INT, "text_editor/line_numbers/line_length_guideline_column", PROPERTY_HINT_RANGE, "20, 160, 10");
+	hints["text_editor/line_numbers/line_length_guideline_column"] = PropertyInfo(Variant::INT, "text_editor/line_numbers/line_length_guideline_column", PROPERTY_HINT_RANGE, "20, 160, 1");
 
 	_initial_set("text_editor/open_scripts/smooth_scrolling", true);
 	_initial_set("text_editor/open_scripts/v_scroll_speed", 80);
@@ -378,12 +391,13 @@ void EditorSettings::_load_defaults(Ref<ConfigFile> p_extra_config) {
 	_initial_set("text_editor/files/trim_trailing_whitespace_on_save", false);
 	_initial_set("text_editor/completion/idle_parse_delay", 2);
 	_initial_set("text_editor/tools/create_signal_callbacks", true);
+	_initial_set("text_editor/tools/sort_members_outline_alphabetically", false);
 	_initial_set("text_editor/files/autosave_interval_secs", 0);
 
 	_initial_set("text_editor/cursor/block_caret", false);
 	_initial_set("text_editor/cursor/caret_blink", true);
 	_initial_set("text_editor/cursor/caret_blink_speed", 0.65);
-	hints["text_editor/cursor/caret_blink_speed"] = PropertyInfo(Variant::REAL, "text_editor/cursor/caret_blink_speed", PROPERTY_HINT_RANGE, "0.1, 10, 0.1");
+	hints["text_editor/cursor/caret_blink_speed"] = PropertyInfo(Variant::REAL, "text_editor/cursor/caret_blink_speed", PROPERTY_HINT_RANGE, "0.1, 10, 0.01");
 	_initial_set("text_editor/cursor/right_click_moves_caret", true);
 
 	_initial_set("text_editor/completion/auto_brace_complete", false);
@@ -391,6 +405,7 @@ void EditorSettings::_load_defaults(Ref<ConfigFile> p_extra_config) {
 	_initial_set("text_editor/completion/callhint_tooltip_offset", Vector2());
 	_initial_set("text_editor/files/restore_scripts_on_load", true);
 	_initial_set("text_editor/completion/complete_file_paths", true);
+	_initial_set("text_editor/completion/add_type_hints", false);
 
 	_initial_set("docks/scene_tree/start_create_dialog_fully_expanded", false);
 	_initial_set("docks/scene_tree/draw_relationship_lines", false);
@@ -398,8 +413,17 @@ void EditorSettings::_load_defaults(Ref<ConfigFile> p_extra_config) {
 
 	_initial_set("editors/grid_map/pick_distance", 5000.0);
 
-	_initial_set("editors/3d/grid_color", Color::html("808080"));
-	hints["editors/3d/grid_color"] = PropertyInfo(Variant::COLOR, "editors/3d/grid_color", PROPERTY_HINT_COLOR_NO_ALPHA, "", PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_RESTART_IF_CHANGED);
+	_initial_set("editors/3d/primary_grid_color", Color::html("909090"));
+	hints["editors/3d/primary_grid_color"] = PropertyInfo(Variant::COLOR, "editors/3d/primary_grid_color", PROPERTY_HINT_COLOR_NO_ALPHA, "", PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_RESTART_IF_CHANGED);
+
+	_initial_set("editors/3d/secondary_grid_color", Color::html("606060"));
+	hints["editors/3d/secondary_grid_color"] = PropertyInfo(Variant::COLOR, "editors/3d/secondary_grid_color", PROPERTY_HINT_COLOR_NO_ALPHA, "", PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_RESTART_IF_CHANGED);
+
+	_initial_set("editors/3d/grid_size", 50);
+	hints["editors/3d/grid_size"] = PropertyInfo(Variant::INT, "editors/3d/grid_size", PROPERTY_HINT_RANGE, "1,500,1", PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_RESTART_IF_CHANGED);
+
+	_initial_set("editors/3d/primary_grid_steps", 10);
+	hints["editors/3d/primary_grid_steps"] = PropertyInfo(Variant::INT, "editors/3d/primary_grid_steps", PROPERTY_HINT_RANGE, "1,100,1", PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_RESTART_IF_CHANGED);
 
 	_initial_set("editors/3d/default_fov", 70.0);
 	_initial_set("editors/3d/default_z_near", 0.05);
@@ -407,6 +431,7 @@ void EditorSettings::_load_defaults(Ref<ConfigFile> p_extra_config) {
 
 	// navigation
 	_initial_set("editors/3d/navigation/navigation_scheme", 0);
+	_initial_set("editors/3d/navigation/invert_y-axis", false);
 	hints["editors/3d/navigation/navigation_scheme"] = PropertyInfo(Variant::INT, "editors/3d/navigation/navigation_scheme", PROPERTY_HINT_ENUM, "Godot,Maya,Modo");
 	_initial_set("editors/3d/navigation/zoom_style", 0);
 	hints["editors/3d/navigation/zoom_style"] = PropertyInfo(Variant::INT, "editors/3d/navigation/zoom_style", PROPERTY_HINT_ENUM, "Vertical, Horizontal");
@@ -451,9 +476,11 @@ void EditorSettings::_load_defaults(Ref<ConfigFile> p_extra_config) {
 	_initial_set("editors/2d/guides_color", Color(0.6, 0.0, 0.8));
 	_initial_set("editors/2d/bone_width", 5);
 	_initial_set("editors/2d/bone_color1", Color(1.0, 1.0, 1.0, 0.9));
-	_initial_set("editors/2d/bone_color2", Color(0.75, 0.75, 0.75, 0.9));
+	_initial_set("editors/2d/bone_color2", Color(0.6, 0.6, 0.6, 0.9));
 	_initial_set("editors/2d/bone_selected_color", Color(0.9, 0.45, 0.45, 0.9));
 	_initial_set("editors/2d/bone_ik_color", Color(0.9, 0.9, 0.45, 0.9));
+	_initial_set("editors/2d/bone_outline_color", Color(0.35, 0.35, 0.35));
+	_initial_set("editors/2d/bone_outline_size", 2);
 	_initial_set("editors/2d/keep_margins_when_changing_anchors", false);
 	_initial_set("editors/2d/warped_mouse_panning", true);
 	_initial_set("editors/2d/simple_spacebar_panning", false);
@@ -550,34 +577,38 @@ void EditorSettings::_load_defaults(Ref<ConfigFile> p_extra_config) {
 }
 
 void EditorSettings::_load_default_text_editor_theme() {
-	_initial_set("text_editor/highlighting/background_color", Color::html("3b000000"));
+
+	bool dark_theme = is_dark_theme();
+
+	_initial_set("text_editor/highlighting/symbol_color", Color::html("badfff"));
+	_initial_set("text_editor/highlighting/keyword_color", Color::html("ffffb3"));
+	_initial_set("text_editor/highlighting/base_type_color", Color::html("a4ffd4"));
+	_initial_set("text_editor/highlighting/engine_type_color", Color::html("83d3ff"));
+	_initial_set("text_editor/highlighting/comment_color", Color::html("676767"));
+	_initial_set("text_editor/highlighting/string_color", Color::html("ef6ebe"));
+	_initial_set("text_editor/highlighting/background_color", dark_theme ? Color::html("3b000000") : Color::html("#323b4f"));
 	_initial_set("text_editor/highlighting/completion_background_color", Color::html("2C2A32"));
 	_initial_set("text_editor/highlighting/completion_selected_color", Color::html("434244"));
 	_initial_set("text_editor/highlighting/completion_existing_color", Color::html("21dfdfdf"));
 	_initial_set("text_editor/highlighting/completion_scroll_color", Color::html("ffffff"));
 	_initial_set("text_editor/highlighting/completion_font_color", Color::html("aaaaaa"));
+	_initial_set("text_editor/highlighting/text_color", Color::html("aaaaaa"));
+	_initial_set("text_editor/highlighting/line_number_color", Color::html("66aaaaaa"));
+	_initial_set("text_editor/highlighting/safe_line_number_color", Color::html("99aac8aa"));
 	_initial_set("text_editor/highlighting/caret_color", Color::html("aaaaaa"));
 	_initial_set("text_editor/highlighting/caret_background_color", Color::html("000000"));
-	_initial_set("text_editor/highlighting/line_number_color", Color::html("66aaaaaa"));
-	_initial_set("text_editor/highlighting/text_color", Color::html("aaaaaa"));
 	_initial_set("text_editor/highlighting/text_selected_color", Color::html("000000"));
-	_initial_set("text_editor/highlighting/keyword_color", Color::html("ffffb3"));
-	_initial_set("text_editor/highlighting/base_type_color", Color::html("a4ffd4"));
-	_initial_set("text_editor/highlighting/engine_type_color", Color::html("83d3ff"));
-	_initial_set("text_editor/highlighting/function_color", Color::html("66a2ce"));
-	_initial_set("text_editor/highlighting/member_variable_color", Color::html("e64e59"));
-	_initial_set("text_editor/highlighting/comment_color", Color::html("676767"));
-	_initial_set("text_editor/highlighting/string_color", Color::html("ef6ebe"));
-	_initial_set("text_editor/highlighting/number_color", Color::html("EB9532"));
-	_initial_set("text_editor/highlighting/symbol_color", Color::html("badfff"));
 	_initial_set("text_editor/highlighting/selection_color", Color::html("6ca9c2"));
 	_initial_set("text_editor/highlighting/brace_mismatch_color", Color(1, 0.2, 0.2));
 	_initial_set("text_editor/highlighting/current_line_color", Color(0.3, 0.5, 0.8, 0.15));
 	_initial_set("text_editor/highlighting/line_length_guideline_color", Color(0.3, 0.5, 0.8, 0.1));
+	_initial_set("text_editor/highlighting/word_highlighted_color", Color(0.8, 0.9, 0.9, 0.15));
+	_initial_set("text_editor/highlighting/number_color", Color::html("EB9532"));
+	_initial_set("text_editor/highlighting/function_color", Color::html("66a2ce"));
+	_initial_set("text_editor/highlighting/member_variable_color", Color::html("e64e59"));
 	_initial_set("text_editor/highlighting/mark_color", Color(1.0, 0.4, 0.4, 0.4));
 	_initial_set("text_editor/highlighting/breakpoint_color", Color(0.8, 0.8, 0.4, 0.2));
 	_initial_set("text_editor/highlighting/code_folding_color", Color(0.8, 0.8, 0.8, 0.8));
-	_initial_set("text_editor/highlighting/word_highlighted_color", Color(0.8, 0.9, 0.9, 0.15));
 	_initial_set("text_editor/highlighting/search_result_color", Color(0.05, 0.25, 0.05, 1));
 	_initial_set("text_editor/highlighting/search_result_border_color", Color(0.1, 0.45, 0.1, 1));
 }
@@ -585,36 +616,17 @@ void EditorSettings::_load_default_text_editor_theme() {
 bool EditorSettings::_save_text_editor_theme(String p_file) {
 	String theme_section = "color_theme";
 	Ref<ConfigFile> cf = memnew(ConfigFile); // hex is better?
-	cf->set_value(theme_section, "background_color", ((Color)get("text_editor/highlighting/background_color")).to_html());
-	cf->set_value(theme_section, "completion_background_color", ((Color)get("text_editor/highlighting/completion_background_color")).to_html());
-	cf->set_value(theme_section, "completion_selected_color", ((Color)get("text_editor/highlighting/completion_selected_color")).to_html());
-	cf->set_value(theme_section, "completion_existing_color", ((Color)get("text_editor/highlighting/completion_existing_color")).to_html());
-	cf->set_value(theme_section, "completion_scroll_color", ((Color)get("text_editor/highlighting/completion_scroll_color")).to_html());
-	cf->set_value(theme_section, "completion_font_color", ((Color)get("text_editor/highlighting/completion_font_color")).to_html());
-	cf->set_value(theme_section, "caret_color", ((Color)get("text_editor/highlighting/caret_color")).to_html());
-	cf->set_value(theme_section, "caret_background_color", ((Color)get("text_editor/highlighting/caret_background_color")).to_html());
-	cf->set_value(theme_section, "line_number_color", ((Color)get("text_editor/highlighting/line_number_color")).to_html());
-	cf->set_value(theme_section, "text_color", ((Color)get("text_editor/highlighting/text_color")).to_html());
-	cf->set_value(theme_section, "text_selected_color", ((Color)get("text_editor/highlighting/text_selected_color")).to_html());
-	cf->set_value(theme_section, "keyword_color", ((Color)get("text_editor/highlighting/keyword_color")).to_html());
-	cf->set_value(theme_section, "base_type_color", ((Color)get("text_editor/highlighting/base_type_color")).to_html());
-	cf->set_value(theme_section, "engine_type_color", ((Color)get("text_editor/highlighting/engine_type_color")).to_html());
-	cf->set_value(theme_section, "function_color", ((Color)get("text_editor/highlighting/function_color")).to_html());
-	cf->set_value(theme_section, "member_variable_color", ((Color)get("text_editor/highlighting/member_variable_color")).to_html());
-	cf->set_value(theme_section, "comment_color", ((Color)get("text_editor/highlighting/comment_color")).to_html());
-	cf->set_value(theme_section, "string_color", ((Color)get("text_editor/highlighting/string_color")).to_html());
-	cf->set_value(theme_section, "number_color", ((Color)get("text_editor/highlighting/number_color")).to_html());
-	cf->set_value(theme_section, "symbol_color", ((Color)get("text_editor/highlighting/symbol_color")).to_html());
-	cf->set_value(theme_section, "selection_color", ((Color)get("text_editor/highlighting/selection_color")).to_html());
-	cf->set_value(theme_section, "brace_mismatch_color", ((Color)get("text_editor/highlighting/brace_mismatch_color")).to_html());
-	cf->set_value(theme_section, "current_line_color", ((Color)get("text_editor/highlighting/current_line_color")).to_html());
-	cf->set_value(theme_section, "line_length_guideline_color", ((Color)get("text_editor/highlighting/line_length_guideline_color")).to_html());
-	cf->set_value(theme_section, "mark_color", ((Color)get("text_editor/highlighting/mark_color")).to_html());
-	cf->set_value(theme_section, "breakpoint_color", ((Color)get("text_editor/highlighting/breakpoint_color")).to_html());
-	cf->set_value(theme_section, "code_folding_color", ((Color)get("text_editor/highlighting/code_folding_color")).to_html());
-	cf->set_value(theme_section, "word_highlighted_color", ((Color)get("text_editor/highlighting/word_highlighted_color")).to_html());
-	cf->set_value(theme_section, "search_result_color", ((Color)get("text_editor/highlighting/search_result_color")).to_html());
-	cf->set_value(theme_section, "search_result_border_color", ((Color)get("text_editor/highlighting/search_result_border_color")).to_html());
+
+	List<String> keys;
+	props.get_key_list(&keys);
+	keys.sort();
+
+	for (const List<String>::Element *E = keys.front(); E; E = E->next()) {
+		String key = E->get();
+		if (key.begins_with("text_editor/highlighting/") && key.find("color") >= 0) {
+			cf->set_value(theme_section, key.replace("text_editor/highlighting/", ""), ((Color)props[key].variant).to_html());
+		}
+	}
 
 	Error err = cf->save(p_file);
 
@@ -1015,6 +1027,14 @@ void EditorSettings::raise_order(const String &p_setting) {
 	props[p_setting].order = ++last_order;
 }
 
+void EditorSettings::set_restart_if_changed(const StringName &p_setting, bool p_restart) {
+	_THREAD_SAFE_METHOD_
+
+	if (!props.has(p_setting))
+		return;
+	props[p_setting].restart_if_changed = p_restart;
+}
+
 void EditorSettings::set_initial_value(const StringName &p_setting, const Variant &p_value, bool p_update_current) {
 
 	_THREAD_SAFE_METHOD_
@@ -1028,16 +1048,19 @@ void EditorSettings::set_initial_value(const StringName &p_setting, const Varian
 	}
 }
 
-Variant _EDITOR_DEF(const String &p_setting, const Variant &p_default) {
+Variant _EDITOR_DEF(const String &p_setting, const Variant &p_default, bool p_restart_if_changed) {
 
 	Variant ret = p_default;
-	if (EditorSettings::get_singleton()->has_setting(p_setting))
+	if (EditorSettings::get_singleton()->has_setting(p_setting)) {
 		ret = EditorSettings::get_singleton()->get(p_setting);
-	else
+	} else {
 		EditorSettings::get_singleton()->set_manually(p_setting, p_default);
+		EditorSettings::get_singleton()->set_restart_if_changed(p_setting, p_restart_if_changed);
+	}
 
-	if (!EditorSettings::get_singleton()->has_default_value(p_setting))
+	if (!EditorSettings::get_singleton()->has_default_value(p_setting)) {
 		EditorSettings::get_singleton()->set_initial_value(p_setting, p_default);
+	}
 
 	return ret;
 }
@@ -1125,7 +1148,7 @@ void EditorSettings::set_project_metadata(const String &p_section, const String 
 	cf->save(path);
 }
 
-Variant EditorSettings::get_project_metadata(const String &p_section, const String &p_key, Variant p_default) {
+Variant EditorSettings::get_project_metadata(const String &p_section, const String &p_key, Variant p_default) const {
 	Ref<ConfigFile> cf = memnew(ConfigFile);
 	String path = get_project_settings_dir().plus_file("project_metadata.cfg");
 	Error err = cf->load(path);
@@ -1188,6 +1211,14 @@ void EditorSettings::load_favorites() {
 		}
 		memdelete(f);
 	}
+}
+
+bool EditorSettings::is_dark_theme() {
+	int AUTO_COLOR = 0;
+	int LIGHT_COLOR = 2;
+	Color base_color = get("interface/theme/base_color");
+	int icon_font_color_setting = get("interface/theme/icon_and_font_color");
+	return (icon_font_color_setting == AUTO_COLOR && ((base_color.r + base_color.g + base_color.b) / 3.0) < 0.5) || icon_font_color_setting == LIGHT_COLOR;
 }
 
 void EditorSettings::list_text_editor_themes() {
@@ -1376,33 +1407,9 @@ struct ShortCutMapping {
 Ref<ShortCut> ED_SHORTCUT(const String &p_path, const String &p_name, uint32_t p_keycode) {
 
 #ifdef OSX_ENABLED
-	static const ShortCutMapping macos_mappings[] = {
-		{ "editor/play", KEY_MASK_CMD | KEY_B },
-		{ "editor/play_scene", KEY_MASK_CMD | KEY_R },
-		{ "editor/pause_scene", KEY_MASK_CMD | KEY_MASK_CTRL | KEY_Y },
-		{ "editor/stop", KEY_MASK_CMD | KEY_PERIOD },
-		{ "editor/play_custom_scene", KEY_MASK_SHIFT | KEY_MASK_CMD | KEY_R },
-		{ "editor/editor_2d", KEY_MASK_ALT | KEY_1 },
-		{ "editor/editor_3d", KEY_MASK_ALT | KEY_2 },
-		{ "editor/editor_script", KEY_MASK_ALT | KEY_3 },
-		{ "editor/editor_help", KEY_MASK_ALT | KEY_SPACE },
-		{ "editor/fullscreen_mode", KEY_MASK_CMD | KEY_MASK_CTRL | KEY_F },
-		{ "editor/distraction_free_mode", KEY_MASK_CMD | KEY_MASK_CTRL | KEY_D },
-		{ "script_text_editor/contextual_help", KEY_MASK_ALT | KEY_MASK_SHIFT | KEY_SPACE },
-		{ "script_text_editor/find_next", KEY_MASK_CMD | KEY_G },
-		{ "script_text_editor/find_previous", KEY_MASK_CMD | KEY_MASK_SHIFT | KEY_G },
-		{ "script_text_editor/toggle_breakpoint", KEY_MASK_CMD | KEY_MASK_SHIFT | KEY_B }
-	};
-
+	// Use Cmd+Backspace as a general replacement for Delete shortcuts on macOS
 	if (p_keycode == KEY_DELETE) {
 		p_keycode = KEY_MASK_CMD | KEY_BACKSPACE;
-	} else {
-		for (int i = 0; i < sizeof(macos_mappings) / sizeof(ShortCutMapping); i++) {
-			if (p_path == macos_mappings[i].path) {
-				p_keycode = macos_mappings[i].keycode;
-				break;
-			}
-		}
 	}
 #endif
 
@@ -1466,6 +1473,9 @@ void EditorSettings::_bind_methods() {
 
 	ClassDB::bind_method(D_METHOD("get_settings_dir"), &EditorSettings::get_settings_dir);
 	ClassDB::bind_method(D_METHOD("get_project_settings_dir"), &EditorSettings::get_project_settings_dir);
+
+	ClassDB::bind_method(D_METHOD("set_project_metadata", "section", "key", "data"), &EditorSettings::set_project_metadata);
+	ClassDB::bind_method(D_METHOD("get_project_metadata", "section", "key", "default"), &EditorSettings::get_project_metadata, DEFVAL(Variant()));
 
 	ClassDB::bind_method(D_METHOD("set_favorite_dirs", "dirs"), &EditorSettings::set_favorite_dirs);
 	ClassDB::bind_method(D_METHOD("get_favorite_dirs"), &EditorSettings::get_favorite_dirs);

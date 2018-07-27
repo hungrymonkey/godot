@@ -63,7 +63,8 @@ class GDScript : public Script {
 		int index;
 		StringName setter;
 		StringName getter;
-		ScriptInstance::RPCMode rpc_mode;
+		MultiplayerAPI::RPCMode rpc_mode;
+		GDScriptDataType data_type;
 	};
 
 	friend class GDScriptInstance;
@@ -145,8 +146,13 @@ public:
 	const Map<StringName, Ref<GDScript> > &get_subclasses() const { return subclasses; }
 	const Map<StringName, Variant> &get_constants() const { return constants; }
 	const Set<StringName> &get_members() const { return members; }
+	const GDScriptDataType &get_member_type(const StringName &p_member) const {
+		ERR_FAIL_COND_V(!member_indices.has(p_member), GDScriptDataType());
+		return member_indices[p_member].data_type;
+	}
 	const Map<StringName, GDScriptFunction *> &get_member_functions() const { return member_functions; }
 	const Ref<GDScriptNativeClass> &get_native() const { return native; }
+	const String &get_script_class_name() const { return name; }
 
 	virtual bool has_script_signal(const StringName &p_signal) const;
 	virtual void get_script_signal_list(List<MethodInfo> *r_signals) const;
@@ -248,8 +254,8 @@ public:
 
 	void reload_members();
 
-	virtual RPCMode get_rpc_mode(const StringName &p_method) const;
-	virtual RPCMode get_rset_mode(const StringName &p_variable) const;
+	virtual MultiplayerAPI::RPCMode get_rpc_mode(const StringName &p_method) const;
+	virtual MultiplayerAPI::RPCMode get_rset_mode(const StringName &p_variable) const;
 
 	GDScriptInstance();
 	~GDScriptInstance();
@@ -262,6 +268,7 @@ class GDScriptLanguage : public ScriptLanguage {
 	Variant *_global_array;
 	Vector<Variant> global_array;
 	Map<StringName, int> globals;
+	Map<StringName, Variant> named_globals;
 
 	struct CallLevel {
 
@@ -369,7 +376,8 @@ public:
 
 	_FORCE_INLINE_ int get_global_array_size() const { return global_array.size(); }
 	_FORCE_INLINE_ Variant *get_global_array() { return _global_array; }
-	_FORCE_INLINE_ const Map<StringName, int> &get_global_map() { return globals; }
+	_FORCE_INLINE_ const Map<StringName, int> &get_global_map() const { return globals; }
+	_FORCE_INLINE_ const Map<StringName, Variant> &get_named_globals_map() const { return named_globals; }
 
 	_FORCE_INLINE_ static GDScriptLanguage *get_singleton() { return singleton; }
 
@@ -389,7 +397,7 @@ public:
 	virtual Ref<Script> get_template(const String &p_class_name, const String &p_base_class_name) const;
 	virtual bool is_using_templates();
 	virtual void make_template(const String &p_class_name, const String &p_base_class_name, Ref<Script> &p_script);
-	virtual bool validate(const String &p_script, int &r_line_error, int &r_col_error, String &r_test_error, const String &p_path = "", List<String> *r_functions = NULL) const;
+	virtual bool validate(const String &p_script, int &r_line_error, int &r_col_error, String &r_test_error, const String &p_path = "", List<String> *r_functions = NULL, Set<int> *r_safe_lines = NULL) const;
 	virtual Script *create_script() const;
 	virtual bool has_named_classes() const;
 	virtual bool supports_builtin_mode() const;
@@ -403,6 +411,8 @@ public:
 	virtual String _get_indentation() const;
 	virtual void auto_indent_code(String &p_code, int p_from_line, int p_to_line) const;
 	virtual void add_global_constant(const StringName &p_variable, const Variant &p_value);
+	virtual void add_named_global_constant(const StringName &p_name, const Variant &p_value);
+	virtual void remove_named_global_constant(const StringName &p_name);
 
 	/* DEBUGGER FUNCTIONS */
 
@@ -434,6 +444,11 @@ public:
 	/* LOADER FUNCTIONS */
 
 	virtual void get_recognized_extensions(List<String> *p_extensions) const;
+
+	/* GLOBAL CLASSES */
+
+	virtual bool handles_global_class_type(const String &p_type) const;
+	virtual String get_global_class_name(const String &p_path, String *r_base_type = NULL) const;
 
 	GDScriptLanguage();
 	~GDScriptLanguage();

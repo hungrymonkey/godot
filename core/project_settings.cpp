@@ -42,7 +42,7 @@
 #include "variant_parser.h"
 #include <zlib.h>
 
-#define FORMAT_VERSION 3
+#define FORMAT_VERSION 4
 
 ProjectSettings *ProjectSettings::singleton = NULL;
 
@@ -105,6 +105,11 @@ void ProjectSettings::set_initial_value(const String &p_name, const Variant &p_v
 	ERR_FAIL_COND(!props.has(p_name));
 	props[p_name].initial = p_value;
 }
+void ProjectSettings::set_restart_if_changed(const String &p_name, bool p_restart) {
+
+	ERR_FAIL_COND(!props.has(p_name));
+	props[p_name].restart_if_changed = p_restart;
+}
 
 String ProjectSettings::globalize_path(const String &p_path) const {
 
@@ -137,7 +142,7 @@ bool ProjectSettings::_set(const StringName &p_name, const Variant &p_value) {
 	else {
 
 		if (p_name == CoreStringNames::get_singleton()->_custom_features) {
-			Vector<String> custom_feature_array = p_value;
+			Vector<String> custom_feature_array = String(p_value).split(",");
 			for (int i = 0; i < custom_feature_array.size(); i++) {
 
 				custom_features.insert(custom_feature_array[i]);
@@ -225,6 +230,9 @@ void ProjectSettings::_get_property_list(List<PropertyInfo> *p_list) const {
 		else
 			vc.flags = PROPERTY_USAGE_EDITOR | PROPERTY_USAGE_STORAGE;
 
+		if (v->restart_if_changed) {
+			vc.flags |= PROPERTY_USAGE_RESTART_IF_CHANGED;
+		}
 		vclist.insert(vc);
 	}
 
@@ -260,6 +268,23 @@ bool ProjectSettings::_load_resource_pack(const String &p_pack) {
 	using_datapack = true;
 
 	return true;
+}
+
+void ProjectSettings::_convert_to_last_version() {
+	if (!has_setting("config_version") || (int)get_setting("config_version") <= 3) {
+
+		// Converts the actions from array to dictionary (array of events to dictionary with deadzone + events)
+		for (Map<StringName, ProjectSettings::VariantContainer>::Element *E = props.front(); E; E = E->next()) {
+			Variant value = E->get().variant;
+			if (String(E->key()).begins_with("input/") && value.get_type() == Variant::ARRAY) {
+				Array array = value;
+				Dictionary action;
+				action["deadzone"] = Variant(0.5f);
+				action["events"] = array;
+				E->get().variant = action;
+			}
+		}
+	}
 }
 
 Error ProjectSettings::setup(const String &p_path, const String &p_main_pack, bool p_upwards) {
@@ -390,6 +415,8 @@ Error ProjectSettings::setup(const String &p_path, const String &p_main_pack, bo
 	if (resource_path.length() && resource_path[resource_path.length() - 1] == '/')
 		resource_path = resource_path.substr(0, resource_path.length() - 1); // chop end
 
+	_convert_to_last_version();
+
 	return OK;
 }
 
@@ -496,7 +523,11 @@ Error ProjectSettings::_load_settings_text(const String p_path) {
 				}
 			} else {
 				// config_version is checked and dropped
-				set(section + "/" + assign, value);
+				if (section == String()) {
+					set(assign, value);
+				} else {
+					set(section + "/" + assign, value);
+				}
 			}
 		} else if (next_tag.name != String()) {
 			section = next_tag.name;
@@ -794,17 +825,17 @@ Error ProjectSettings::save_custom(const String &p_path, const CustomMap &p_cust
 	return OK;
 }
 
-Variant _GLOBAL_DEF(const String &p_var, const Variant &p_default) {
+Variant _GLOBAL_DEF(const String &p_var, const Variant &p_default, bool p_restart_if_changed) {
 
 	Variant ret;
-	if (ProjectSettings::get_singleton()->has_setting(p_var)) {
-		ret = ProjectSettings::get_singleton()->get(p_var);
-	} else {
+	if (!ProjectSettings::get_singleton()->has_setting(p_var)) {
 		ProjectSettings::get_singleton()->set(p_var, p_default);
-		ret = p_default;
 	}
+	ret = ProjectSettings::get_singleton()->get(p_var);
+
 	ProjectSettings::get_singleton()->set_initial_value(p_var, p_default);
 	ProjectSettings::get_singleton()->set_builtin_order(p_var);
+	ProjectSettings::get_singleton()->set_restart_if_changed(p_var, p_restart_if_changed);
 	return ret;
 }
 
@@ -852,6 +883,10 @@ void ProjectSettings::set_custom_property_info(const String &p_prop, const Prope
 	custom_prop_info[p_prop].name = p_prop;
 }
 
+const Map<StringName, PropertyInfo> &ProjectSettings::get_custom_property_info() const {
+	return custom_prop_info;
+}
+
 void ProjectSettings::set_disable_feature_overrides(bool p_disable) {
 
 	disable_feature_overrides = p_disable;
@@ -884,6 +919,10 @@ void ProjectSettings::set_setting(const String &p_setting, const Variant &p_valu
 
 Variant ProjectSettings::get_setting(const String &p_setting) const {
 	return get(p_setting);
+}
+
+bool ProjectSettings::has_custom_feature(const String &p_feature) const {
+	return custom_features.has(p_feature);
 }
 
 void ProjectSettings::_bind_methods() {
@@ -1050,7 +1089,6 @@ ProjectSettings::ProjectSettings() {
 	custom_prop_info["rendering/threads/thread_model"] = PropertyInfo(Variant::INT, "rendering/threads/thread_model", PROPERTY_HINT_ENUM, "Single-Unsafe,Single-Safe,Multi-Threaded");
 	custom_prop_info["physics/2d/thread_model"] = PropertyInfo(Variant::INT, "physics/2d/thread_model", PROPERTY_HINT_ENUM, "Single-Unsafe,Single-Safe,Multi-Threaded");
 	custom_prop_info["rendering/quality/intended_usage/framebuffer_allocation"] = PropertyInfo(Variant::INT, "rendering/quality/intended_usage/framebuffer_allocation", PROPERTY_HINT_ENUM, "2D,2D Without Sampling,3D,3D Without Effects");
-	GLOBAL_DEF("rendering/quality/intended_usage/framebuffer_mode", 2);
 
 	GLOBAL_DEF("debug/settings/profiler/max_functions", 16384);
 

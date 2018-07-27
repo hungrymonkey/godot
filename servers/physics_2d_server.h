@@ -416,6 +416,19 @@ public:
 	virtual void body_set_param(RID p_body, BodyParameter p_param, float p_value) = 0;
 	virtual float body_get_param(RID p_body, BodyParameter p_param) const = 0;
 
+	enum CombineMode {
+		COMBINE_MODE_MAX,
+		COMBINE_MODE_MIN,
+		COMBINE_MODE_MULTIPLY,
+		COMBINE_MODE_AVERAGE,
+
+		COMBINE_MODE_INHERIT /// Inherit from other body or use COMBINE_MODE_MAX (Restitution) COMBINE_MODE_MULTIPLY (Friction)
+	};
+
+	/// p_param accept only Bounce and Friction
+	virtual void body_set_combine_mode(RID p_body, BodyParameter p_param, CombineMode p_mode) = 0;
+	virtual CombineMode body_get_combine_mode(RID p_body, BodyParameter p_param) const = 0;
+
 	//state
 	enum BodyState {
 		BODY_STATE_TRANSFORM,
@@ -479,7 +492,22 @@ public:
 		Variant collider_metadata;
 	};
 
-	virtual bool body_test_motion(RID p_body, const Transform2D &p_from, const Vector2 &p_motion, bool p_infinite_inertia, float p_margin = 0.001, MotionResult *r_result = NULL) = 0;
+	virtual bool body_test_motion(RID p_body, const Transform2D &p_from, const Vector2 &p_motion, bool p_infinite_inertia, float p_margin = 0.001, MotionResult *r_result = NULL, bool p_exclude_raycast_shapes = true) = 0;
+
+	struct SeparationResult {
+
+		float collision_depth;
+		Vector2 collision_point;
+		Vector2 collision_normal;
+		Vector2 collider_velocity;
+		int collision_local_shape;
+		ObjectID collider_id;
+		RID collider;
+		int collider_shape;
+		Variant collider_metadata;
+	};
+
+	virtual int body_test_ray_separation(RID p_body, const Transform2D &p_transform, bool p_infinite_inertia, Vector2 &r_recover_motion, SeparationResult *r_results, int p_result_max, float p_margin = 0.001) = 0;
 
 	/* JOINT API */
 

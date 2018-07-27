@@ -36,6 +36,7 @@
 #include "core/self_list.h"
 #include "io/resource_loader.h"
 #include "io/resource_saver.h"
+#include "oa_hash_map.h"
 #include "ordered_hash_map.h"
 #include "os/thread_safe.h"
 #include "scene/main/node.h"
@@ -180,6 +181,9 @@ class NativeScriptInstance : public ScriptInstance {
 
 	Object *owner;
 	Ref<NativeScript> script;
+#ifdef DEBUG_ENABLED
+	StringName current_method_call;
+#endif
 
 	void _ml_call_reversed(NativeScriptDesc *script_data, const StringName &p_method, const Variant **p_args, int p_argcount);
 
@@ -195,8 +199,8 @@ public:
 	virtual Variant call(const StringName &p_method, const Variant **p_args, int p_argcount, Variant::CallError &r_error);
 	virtual void notification(int p_notification);
 	virtual Ref<Script> get_script() const;
-	virtual RPCMode get_rpc_mode(const StringName &p_method) const;
-	virtual RPCMode get_rset_mode(const StringName &p_variable) const;
+	virtual MultiplayerAPI::RPCMode get_rpc_mode(const StringName &p_method) const;
+	virtual MultiplayerAPI::RPCMode get_rset_mode(const StringName &p_variable) const;
 	virtual ScriptLanguage *get_language();
 
 	virtual void call_multilevel(const StringName &p_method, const Variant **p_args, int p_argcount);
@@ -239,6 +243,8 @@ private:
 
 	Vector<Pair<bool, godot_instance_binding_functions> > binding_functions;
 	Set<Vector<void *> *> binding_instances;
+
+	Map<int, HashMap<StringName, const void *> > global_type_tags;
 
 public:
 	// These two maps must only be touched on the main thread
@@ -289,7 +295,7 @@ public:
 	virtual void get_comment_delimiters(List<String> *p_delimiters) const;
 	virtual void get_string_delimiters(List<String> *p_delimiters) const;
 	virtual Ref<Script> get_template(const String &p_class_name, const String &p_base_class_name) const;
-	virtual bool validate(const String &p_script, int &r_line_error, int &r_col_error, String &r_test_error, const String &p_path, List<String> *r_functions) const;
+	virtual bool validate(const String &p_script, int &r_line_error, int &r_col_error, String &r_test_error, const String &p_path, List<String> *r_functions, Set<int> *r_safe_lines = NULL) const;
 	virtual Script *create_script() const;
 	virtual bool has_named_classes() const;
 	virtual bool supports_builtin_mode() const;
@@ -323,6 +329,9 @@ public:
 
 	virtual void *alloc_instance_binding_data(Object *p_object);
 	virtual void free_instance_binding_data(void *p_data);
+
+	void set_global_type_tag(int p_idx, StringName p_class_name, const void *p_type_tag);
+	const void *get_global_type_tag(int p_idx, StringName p_class_name) const;
 };
 
 inline NativeScriptDesc *NativeScript::get_script_desc() const {

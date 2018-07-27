@@ -231,6 +231,13 @@ void GridMapEditor::_menu_option(int p_option) {
 			_delete_selection();
 
 		} break;
+		case MENU_OPTION_SELECTION_FILL: {
+			if (!selection.active)
+				return;
+
+			_fill_selection();
+
+		} break;
 		case MENU_OPTION_GRIDMAP_SETTINGS: {
 			settings_dialog->popup_centered(settings_vbc->get_combined_minimum_size() + Size2(50, 50) * EDSCALE);
 		} break;
@@ -445,6 +452,29 @@ void GridMapEditor::_delete_selection() {
 			for (int k = selection.begin.z; k <= selection.end.z; k++) {
 
 				undo_redo->add_do_method(node, "set_cell_item", i, j, k, GridMap::INVALID_CELL_ITEM);
+				undo_redo->add_undo_method(node, "set_cell_item", i, j, k, node->get_cell_item(i, j, k), node->get_cell_item_orientation(i, j, k));
+			}
+		}
+	}
+	undo_redo->commit_action();
+
+	selection.active = false;
+	_validate_selection();
+}
+
+void GridMapEditor::_fill_selection() {
+
+	if (!selection.active)
+		return;
+
+	undo_redo->create_action(TTR("GridMap Fill Selection"));
+	for (int i = selection.begin.x; i <= selection.end.x; i++) {
+
+		for (int j = selection.begin.y; j <= selection.end.y; j++) {
+
+			for (int k = selection.begin.z; k <= selection.end.z; k++) {
+
+				undo_redo->add_do_method(node, "set_cell_item", i, j, k, selected_pallete, cursor_rot);
 				undo_redo->add_undo_method(node, "set_cell_item", i, j, k, node->get_cell_item(i, j, k), node->get_cell_item_orientation(i, j, k));
 			}
 		}
@@ -1046,14 +1076,14 @@ GridMapEditor::GridMapEditor(EditorNode *p_editor) {
 	options->get_popup()->add_item(TTR("Previous Floor"), MENU_OPTION_PREV_LEVEL, KEY_Q);
 	options->get_popup()->add_item(TTR("Next Floor"), MENU_OPTION_NEXT_LEVEL, KEY_E);
 	options->get_popup()->add_separator();
-	options->get_popup()->add_check_item(TTR("Clip Disabled"), MENU_OPTION_CLIP_DISABLED);
+	options->get_popup()->add_radio_check_item(TTR("Clip Disabled"), MENU_OPTION_CLIP_DISABLED);
 	options->get_popup()->set_item_checked(options->get_popup()->get_item_index(MENU_OPTION_CLIP_DISABLED), true);
-	options->get_popup()->add_check_item(TTR("Clip Above"), MENU_OPTION_CLIP_ABOVE);
-	options->get_popup()->add_check_item(TTR("Clip Below"), MENU_OPTION_CLIP_BELOW);
+	options->get_popup()->add_radio_check_item(TTR("Clip Above"), MENU_OPTION_CLIP_ABOVE);
+	options->get_popup()->add_radio_check_item(TTR("Clip Below"), MENU_OPTION_CLIP_BELOW);
 	options->get_popup()->add_separator();
-	options->get_popup()->add_check_item(TTR("Edit X Axis"), MENU_OPTION_X_AXIS, KEY_Z);
-	options->get_popup()->add_check_item(TTR("Edit Y Axis"), MENU_OPTION_Y_AXIS, KEY_X);
-	options->get_popup()->add_check_item(TTR("Edit Z Axis"), MENU_OPTION_Z_AXIS, KEY_C);
+	options->get_popup()->add_radio_check_item(TTR("Edit X Axis"), MENU_OPTION_X_AXIS, KEY_Z);
+	options->get_popup()->add_radio_check_item(TTR("Edit Y Axis"), MENU_OPTION_Y_AXIS, KEY_X);
+	options->get_popup()->add_radio_check_item(TTR("Edit Z Axis"), MENU_OPTION_Z_AXIS, KEY_C);
 	options->get_popup()->set_item_checked(options->get_popup()->get_item_index(MENU_OPTION_Y_AXIS), true);
 	options->get_popup()->add_separator();
 	options->get_popup()->add_item(TTR("Cursor Rotate X"), MENU_OPTION_CURSOR_ROTATE_X, KEY_A);
@@ -1072,6 +1102,7 @@ GridMapEditor::GridMapEditor(EditorNode *p_editor) {
 	options->get_popup()->add_separator();
 	options->get_popup()->add_item(TTR("Duplicate Selection"), MENU_OPTION_SELECTION_DUPLICATE, KEY_MASK_SHIFT + KEY_C);
 	options->get_popup()->add_item(TTR("Clear Selection"), MENU_OPTION_SELECTION_CLEAR, KEY_MASK_SHIFT + KEY_X);
+	options->get_popup()->add_item(TTR("Fill Selection"), MENU_OPTION_SELECTION_FILL, KEY_MASK_SHIFT + KEY_F);
 
 	options->get_popup()->add_separator();
 	options->get_popup()->add_item(TTR("Settings"), MENU_OPTION_GRIDMAP_SETTINGS);
@@ -1154,9 +1185,9 @@ GridMapEditor::GridMapEditor(EditorNode *p_editor) {
 				for (int k = 0; k < 3; k++) {
 
 					if (i < 3)
-						face_points[j][(i + k) % 3] = v[k] * (i >= 3 ? -1 : 1);
+						face_points[j][(i + k) % 3] = v[k];
 					else
-						face_points[3 - j][(i + k) % 3] = v[k] * (i >= 3 ? -1 : 1);
+						face_points[3 - j][(i + k) % 3] = -v[k];
 				}
 			}
 

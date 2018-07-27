@@ -90,6 +90,9 @@ static const char *features[] = {
 #if defined(MBEDTLS_ARC4_ALT)
     "MBEDTLS_ARC4_ALT",
 #endif /* MBEDTLS_ARC4_ALT */
+#if defined(MBEDTLS_ARIA_ALT)
+    "MBEDTLS_ARIA_ALT",
+#endif /* MBEDTLS_ARIA_ALT */
 #if defined(MBEDTLS_BLOWFISH_ALT)
     "MBEDTLS_BLOWFISH_ALT",
 #endif /* MBEDTLS_BLOWFISH_ALT */
@@ -237,6 +240,9 @@ static const char *features[] = {
 #if defined(MBEDTLS_AES_ROM_TABLES)
     "MBEDTLS_AES_ROM_TABLES",
 #endif /* MBEDTLS_AES_ROM_TABLES */
+#if defined(MBEDTLS_AES_FEWER_TABLES)
+    "MBEDTLS_AES_FEWER_TABLES",
+#endif /* MBEDTLS_AES_FEWER_TABLES */
 #if defined(MBEDTLS_CAMELLIA_SMALL_MEMORY)
     "MBEDTLS_CAMELLIA_SMALL_MEMORY",
 #endif /* MBEDTLS_CAMELLIA_SMALL_MEMORY */
@@ -306,6 +312,9 @@ static const char *features[] = {
 #if defined(MBEDTLS_ECP_DP_CURVE25519_ENABLED)
     "MBEDTLS_ECP_DP_CURVE25519_ENABLED",
 #endif /* MBEDTLS_ECP_DP_CURVE25519_ENABLED */
+#if defined(MBEDTLS_ECP_DP_CURVE448_ENABLED)
+    "MBEDTLS_ECP_DP_CURVE448_ENABLED",
+#endif /* MBEDTLS_ECP_DP_CURVE448_ENABLED */
 #if defined(MBEDTLS_ECP_NIST_OPTIM)
     "MBEDTLS_ECP_NIST_OPTIM",
 #endif /* MBEDTLS_ECP_NIST_OPTIM */
@@ -468,6 +477,9 @@ static const char *features[] = {
 #if defined(MBEDTLS_SSL_TRUNCATED_HMAC)
     "MBEDTLS_SSL_TRUNCATED_HMAC",
 #endif /* MBEDTLS_SSL_TRUNCATED_HMAC */
+#if defined(MBEDTLS_SSL_TRUNCATED_HMAC_COMPAT)
+    "MBEDTLS_SSL_TRUNCATED_HMAC_COMPAT",
+#endif /* MBEDTLS_SSL_TRUNCATED_HMAC_COMPAT */
 #if defined(MBEDTLS_THREADING_ALT)
     "MBEDTLS_THREADING_ALT",
 #endif /* MBEDTLS_THREADING_ALT */
@@ -522,6 +534,9 @@ static const char *features[] = {
 #if defined(MBEDTLS_CAMELLIA_C)
     "MBEDTLS_CAMELLIA_C",
 #endif /* MBEDTLS_CAMELLIA_C */
+#if defined(MBEDTLS_ARIA_C)
+    "MBEDTLS_ARIA_C",
+#endif /* MBEDTLS_ARIA_C */
 #if defined(MBEDTLS_CCM_C)
     "MBEDTLS_CCM_C",
 #endif /* MBEDTLS_CCM_C */

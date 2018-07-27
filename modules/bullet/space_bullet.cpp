@@ -36,6 +36,7 @@
 #include "constraint_bullet.h"
 #include "godot_collision_configuration.h"
 #include "godot_collision_dispatcher.h"
+#include "project_settings.h"
 #include "rigid_body_bullet.h"
 #include "servers/physics_server.h"
 #include "soft_body_bullet.h"
@@ -122,7 +123,7 @@ int BulletPhysicsDirectSpaceState::intersect_shape(const RID &p_shape, const Tra
 
 	ShapeBullet *shape = space->get_physics_server()->get_shape_owner()->get(p_shape);
 
-	btCollisionShape *btShape = shape->create_bt_shape(p_xform.basis.get_scale(), p_margin);
+	btCollisionShape *btShape = shape->create_bt_shape(p_xform.basis.get_scale_abs(), p_margin);
 	if (!btShape->isConvex()) {
 		bulletdelete(btShape);
 		ERR_PRINTS("The shape is not a convex shape, then is not supported: shape type: " + itos(shape->get_type()));
@@ -202,7 +203,7 @@ bool BulletPhysicsDirectSpaceState::collide_shape(RID p_shape, const Transform &
 
 	ShapeBullet *shape = space->get_physics_server()->get_shape_owner()->get(p_shape);
 
-	btCollisionShape *btShape = shape->create_bt_shape(p_shape_xform.basis.get_scale(), p_margin);
+	btCollisionShape *btShape = shape->create_bt_shape(p_shape_xform.basis.get_scale_abs(), p_margin);
 	if (!btShape->isConvex()) {
 		bulletdelete(btShape);
 		ERR_PRINTS("The shape is not a convex shape, then is not supported: shape type: " + itos(shape->get_type()));
@@ -234,7 +235,7 @@ bool BulletPhysicsDirectSpaceState::rest_info(RID p_shape, const Transform &p_sh
 
 	ShapeBullet *shape = space->get_physics_server()->get_shape_owner()->get(p_shape);
 
-	btCollisionShape *btShape = shape->create_bt_shape(p_shape_xform.basis.get_scale(), p_margin);
+	btCollisionShape *btShape = shape->create_bt_shape(p_shape_xform.basis.get_scale_abs(), p_margin);
 	if (!btShape->isConvex()) {
 		bulletdelete(btShape);
 		ERR_PRINTS("The shape is not a convex shape, then is not supported: shape type: " + itos(shape->get_type()));
@@ -325,7 +326,7 @@ Vector3 BulletPhysicsDirectSpaceState::get_closest_point_to_object_volume(RID p_
 	}
 }
 
-SpaceBullet::SpaceBullet(bool p_create_soft_world) :
+SpaceBullet::SpaceBullet() :
 		broadphase(NULL),
 		dispatcher(NULL),
 		solver(NULL),
@@ -338,7 +339,7 @@ SpaceBullet::SpaceBullet(bool p_create_soft_world) :
 		gravityMagnitude(10),
 		contactDebugCount(0) {
 
-	create_empty_world(p_create_soft_world);
+	create_empty_world(GLOBAL_DEF("physics/3d/active_soft_world", true));
 	direct_access = memnew(BulletPhysicsDirectSpaceState(this));
 }
 
@@ -355,6 +356,7 @@ void SpaceBullet::flush_queries() {
 }
 
 void SpaceBullet::step(real_t p_delta_time) {
+	delta_time = p_delta_time;
 	dynamicsWorld->stepSimulation(p_delta_time, 0, 0);
 }
 
@@ -483,6 +485,7 @@ void SpaceBullet::reload_collision_filters(RigidBodyBullet *p_body) {
 void SpaceBullet::add_soft_body(SoftBodyBullet *p_body) {
 	if (is_using_soft_world()) {
 		if (p_body->get_bt_soft_body()) {
+			p_body->get_bt_soft_body()->m_worldInfo = get_soft_body_world_info();
 			static_cast<btSoftRigidDynamicsWorld *>(dynamicsWorld)->addSoftBody(p_body->get_bt_soft_body(), p_body->get_collision_layer(), p_body->get_collision_mask());
 		}
 	} else {
@@ -494,6 +497,7 @@ void SpaceBullet::remove_soft_body(SoftBodyBullet *p_body) {
 	if (is_using_soft_world()) {
 		if (p_body->get_bt_soft_body()) {
 			static_cast<btSoftRigidDynamicsWorld *>(dynamicsWorld)->removeSoftBody(p_body->get_bt_soft_body());
+			p_body->get_bt_soft_body()->m_worldInfo = NULL;
 		}
 	}
 }
@@ -549,7 +553,43 @@ BulletPhysicsDirectSpaceState *SpaceBullet::get_direct_state() {
 }
 
 btScalar calculateGodotCombinedRestitution(const btCollisionObject *body0, const btCollisionObject *body1) {
-	return MAX(body0->getRestitution(), body1->getRestitution());
+
+	const PhysicsServer::CombineMode cm = static_cast<RigidBodyBullet *>(body0->getUserPointer())->get_restitution_combine_mode();
+
+	switch (cm) {
+		case PhysicsServer::COMBINE_MODE_INHERIT:
+			if (static_cast<RigidBodyBullet *>(body1->getUserPointer())->get_restitution_combine_mode() != PhysicsServer::COMBINE_MODE_INHERIT)
+				return calculateGodotCombinedRestitution(body1, body0);
+			// else use MAX [This is used when the two bodies doesn't use physical material]
+		case PhysicsServer::COMBINE_MODE_MAX:
+			return MAX(body0->getRestitution(), body1->getRestitution());
+		case PhysicsServer::COMBINE_MODE_MIN:
+			return MIN(body0->getRestitution(), body1->getRestitution());
+		case PhysicsServer::COMBINE_MODE_MULTIPLY:
+			return body0->getRestitution() * body1->getRestitution();
+		default: // Is always PhysicsServer::COMBINE_MODE_AVERAGE:
+			return (body0->getRestitution() + body1->getRestitution()) / 2;
+	}
+}
+
+btScalar calculateGodotCombinedFriction(const btCollisionObject *body0, const btCollisionObject *body1) {
+
+	const PhysicsServer::CombineMode cm = static_cast<RigidBodyBullet *>(body0->getUserPointer())->get_friction_combine_mode();
+
+	switch (cm) {
+		case PhysicsServer::COMBINE_MODE_INHERIT:
+			if (static_cast<RigidBodyBullet *>(body1->getUserPointer())->get_friction_combine_mode() != PhysicsServer::COMBINE_MODE_INHERIT)
+				return calculateGodotCombinedFriction(body1, body0);
+			// else use MULTIPLY [This is used when the two bodies doesn't use physical material]
+		case PhysicsServer::COMBINE_MODE_MULTIPLY:
+			return body0->getFriction() * body1->getFriction();
+		case PhysicsServer::COMBINE_MODE_MAX:
+			return MAX(body0->getFriction(), body1->getFriction());
+		case PhysicsServer::COMBINE_MODE_MIN:
+			return MIN(body0->getFriction(), body1->getFriction());
+		default: // Is always PhysicsServer::COMBINE_MODE_AVERAGE:
+			return (body0->getFriction() * body1->getFriction()) / 2;
+	}
 }
 
 void SpaceBullet::create_empty_world(bool p_create_soft_world) {
@@ -585,6 +625,7 @@ void SpaceBullet::create_empty_world(bool p_create_soft_world) {
 	ghostPairCallback = bulletnew(btGhostPairCallback);
 	godotFilterCallback = bulletnew(GodotFilterCallback);
 	gCalculateCombinedRestitutionCallback = &calculateGodotCombinedRestitution;
+	gCalculateCombinedFrictionCallback = &calculateGodotCombinedFriction;
 
 	dynamicsWorld->setWorldUserInfo(this);
 
@@ -660,7 +701,10 @@ void SpaceBullet::check_ghost_overlaps() {
 		// For each overlapping
 		for (i = ghostOverlaps.size() - 1; 0 <= i; --i) {
 
-			if (!(ghostOverlaps[i]->getUserIndex() == CollisionObjectBullet::TYPE_RIGID_BODY || ghostOverlaps[i]->getUserIndex() == CollisionObjectBullet::TYPE_AREA))
+			if (ghostOverlaps[i]->getUserIndex() == CollisionObjectBullet::TYPE_AREA) {
+				if (!static_cast<AreaBullet *>(ghostOverlaps[i]->getUserPointer())->is_monitorable())
+					continue;
+			} else if (ghostOverlaps[i]->getUserIndex() != CollisionObjectBullet::TYPE_RIGID_BODY)
 				continue;
 
 			otherObject = static_cast<RigidCollisionObjectBullet *>(ghostOverlaps[i]->getUserPointer());
@@ -838,20 +882,19 @@ bool SpaceBullet::test_body_motion(RigidBodyBullet *p_body, const Transform &p_f
 	}
 #endif
 
-	btTransform body_safe_position;
-	G_TO_B(p_from, body_safe_position);
-	UNSCALE_BT_BASIS(body_safe_position);
+	btTransform body_transform;
+	G_TO_B(p_from, body_transform);
+	UNSCALE_BT_BASIS(body_transform);
 
-	btVector3 recover_initial_position(0, 0, 0);
+	btVector3 initial_recover_motion(0, 0, 0);
 	{ /// Phase one - multi shapes depenetration using margin
 		for (int t(RECOVERING_MOVEMENT_CYCLES); 0 < t; --t) {
-			if (!recover_from_penetration(p_body, body_safe_position, RECOVERING_MOVEMENT_SCALE, p_infinite_inertia, recover_initial_position)) {
+			if (!recover_from_penetration(p_body, body_transform, RECOVERING_MOVEMENT_SCALE, p_infinite_inertia, initial_recover_motion)) {
 				break;
 			}
 		}
-
 		// Add recover movement in order to make it safe
-		body_safe_position.getOrigin() += recover_initial_position;
+		body_transform.getOrigin() += initial_recover_motion;
 	}
 
 	btVector3 motion;
@@ -882,7 +925,7 @@ bool SpaceBullet::test_body_motion(RigidBodyBullet *p_body, const Transform &p_f
 			}
 			btConvexShape *convex_shape_test(static_cast<btConvexShape *>(p_body->get_bt_shape(shIndex)));
 
-			btTransform shape_world_from = body_safe_position * p_body->get_kinematic_utilities()->shapes[shIndex].transform;
+			btTransform shape_world_from = body_transform * p_body->get_kinematic_utilities()->shapes[shIndex].transform;
 
 			btTransform shape_world_to(shape_world_from);
 			shape_world_to.getOrigin() += motion;
@@ -900,62 +943,49 @@ bool SpaceBullet::test_body_motion(RigidBodyBullet *p_body, const Transform &p_f
 			}
 		}
 
-		body_safe_position.getOrigin() += motion;
+		body_transform.getOrigin() += motion;
 	}
 
 	bool has_penetration = false;
 
-	{ /// Phase three - Recover + contact test with margin
+	{ /// Phase three - contact test with margin
 
-		btVector3 delta_recover_movement(0, 0, 0);
+		btVector3 __rec(0, 0, 0);
 		RecoverResult r_recover_result;
-		bool l_has_penetration;
-		real_t l_penetration_distance = 1e20;
 
-		for (int t(RECOVERING_MOVEMENT_CYCLES); 0 < t; --t) {
-			l_has_penetration = recover_from_penetration(p_body, body_safe_position, RECOVERING_MOVEMENT_SCALE, p_infinite_inertia, delta_recover_movement, &r_recover_result);
+		has_penetration = recover_from_penetration(p_body, body_transform, 0, p_infinite_inertia, __rec, &r_recover_result);
 
-			if (r_result) {
-				B_TO_G(motion + delta_recover_movement + recover_initial_position, r_result->motion);
+		// Parse results
+		if (r_result) {
+			B_TO_G(motion + initial_recover_motion, r_result->motion);
 
-				if (l_has_penetration) {
-					has_penetration = true;
-					if (l_penetration_distance <= r_recover_result.penetration_distance) {
-						continue;
-					}
+			if (has_penetration) {
 
-					l_penetration_distance = r_recover_result.penetration_distance;
+				const btRigidBody *btRigid = static_cast<const btRigidBody *>(r_recover_result.other_collision_object);
+				CollisionObjectBullet *collisionObject = static_cast<CollisionObjectBullet *>(btRigid->getUserPointer());
 
-					const btRigidBody *btRigid = static_cast<const btRigidBody *>(r_recover_result.other_collision_object);
-					CollisionObjectBullet *collisionObject = static_cast<CollisionObjectBullet *>(btRigid->getUserPointer());
+				B_TO_G(motion, r_result->remainder); // is the remaining movements
+				r_result->remainder = p_motion - r_result->remainder;
 
-					B_TO_G(motion, r_result->remainder); // is the remaining movements
-					r_result->remainder = p_motion - r_result->remainder;
-					B_TO_G(r_recover_result.pointWorld, r_result->collision_point);
-					B_TO_G(r_recover_result.normal, r_result->collision_normal);
-					B_TO_G(btRigid->getVelocityInLocalPoint(r_recover_result.pointWorld - btRigid->getWorldTransform().getOrigin()), r_result->collider_velocity); // It calculates velocity at point and assign it using special function Bullet_to_Godot
-					r_result->collider = collisionObject->get_self();
-					r_result->collider_id = collisionObject->get_instance_id();
-					r_result->collider_shape = r_recover_result.other_compound_shape_index;
-					r_result->collision_local_shape = r_recover_result.local_shape_most_recovered;
+				B_TO_G(r_recover_result.pointWorld, r_result->collision_point);
+				B_TO_G(r_recover_result.normal, r_result->collision_normal);
+				B_TO_G(btRigid->getVelocityInLocalPoint(r_recover_result.pointWorld - btRigid->getWorldTransform().getOrigin()), r_result->collider_velocity); // It calculates velocity at point and assign it using special function Bullet_to_Godot
+				r_result->collider = collisionObject->get_self();
+				r_result->collider_id = collisionObject->get_instance_id();
+				r_result->collider_shape = r_recover_result.other_compound_shape_index;
+				r_result->collision_local_shape = r_recover_result.local_shape_most_recovered;
 
 #if debug_test_motion
-					Vector3 sup_line2;
-					B_TO_G(motion, sup_line2);
-					normalLine->clear();
-					normalLine->begin(Mesh::PRIMITIVE_LINES, NULL);
-					normalLine->add_vertex(r_result->collision_point);
-					normalLine->add_vertex(r_result->collision_point + r_result->collision_normal * 10);
-					normalLine->end();
+				Vector3 sup_line2;
+				B_TO_G(motion, sup_line2);
+				normalLine->clear();
+				normalLine->begin(Mesh::PRIMITIVE_LINES, NULL);
+				normalLine->add_vertex(r_result->collision_point);
+				normalLine->add_vertex(r_result->collision_point + r_result->collision_normal * 10);
+				normalLine->end();
 #endif
-				} else {
-					r_result->remainder = Vector3();
-				}
 			} else {
-				if (!l_has_penetration)
-					break;
-				else
-					has_penetration = true;
+				r_result->remainder = Vector3();
 			}
 		}
 	}
@@ -993,7 +1023,7 @@ public:
 	}
 
 	void reset() {
-		result_collision_objects.empty();
+		result_collision_objects.clear();
 	}
 };
 
@@ -1028,7 +1058,10 @@ bool SpaceBullet::recover_from_penetration(RigidBodyBullet *p_body, const btTran
 
 		for (int i = recover_broad_result.result_collision_objects.size() - 1; 0 <= i; --i) {
 			btCollisionObject *otherObject = recover_broad_result.result_collision_objects[i];
-			if (!p_body->get_bt_collision_object()->checkCollideWith(otherObject) || !otherObject->checkCollideWith(p_body->get_bt_collision_object()) || (p_infinite_inertia && !otherObject->isStaticOrKinematicObject()))
+			if (p_infinite_inertia && !otherObject->isStaticOrKinematicObject()) {
+				otherObject->activate(); // Force activation of hitten rigid, soft body
+				continue;
+			} else if (!p_body->get_bt_collision_object()->checkCollideWith(otherObject) || !otherObject->checkCollideWith(p_body->get_bt_collision_object()))
 				continue;
 
 			if (otherObject->getCollisionShape()->isCompound()) {
@@ -1117,7 +1150,7 @@ bool SpaceBullet::RFP_convex_world_test(const btConvexShape *p_shapeA, const btC
 		dispatcher->freeCollisionAlgorithm(algorithm);
 
 		if (contactPointResult.hasHit()) {
-			r_delta_recover_movement += contactPointResult.m_pointNormalWorld * (contactPointResult.m_penetration_distance * p_recover_movement_scale);
+			r_delta_recover_movement += contactPointResult.m_pointNormalWorld * (contactPointResult.m_penetration_distance * -1 * p_recover_movement_scale);
 
 			if (r_recover_result) {
 				if (contactPointResult.m_penetration_distance < r_recover_result->penetration_distance) {

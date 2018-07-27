@@ -201,7 +201,7 @@ void Camera::make_current() {
 	//get_scene()->call_group(SceneMainLoop::GROUP_CALL_REALTIME,camera_group,"_camera_make_current",this);
 }
 
-void Camera::clear_current() {
+void Camera::clear_current(bool p_enable_next) {
 
 	current = false;
 	if (!is_inside_tree())
@@ -209,7 +209,10 @@ void Camera::clear_current() {
 
 	if (get_viewport()->get_camera() == this) {
 		get_viewport()->_camera_set(NULL);
-		get_viewport()->_camera_make_next_current(this);
+
+		if (p_enable_next) {
+			get_viewport()->_camera_make_next_current(this);
+		}
 	}
 }
 
@@ -439,7 +442,7 @@ void Camera::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_perspective", "fov", "z_near", "z_far"), &Camera::set_perspective);
 	ClassDB::bind_method(D_METHOD("set_orthogonal", "size", "z_near", "z_far"), &Camera::set_orthogonal);
 	ClassDB::bind_method(D_METHOD("make_current"), &Camera::make_current);
-	ClassDB::bind_method(D_METHOD("clear_current"), &Camera::clear_current);
+	ClassDB::bind_method(D_METHOD("clear_current", "enable_next"), &Camera::clear_current, DEFVAL(true));
 	ClassDB::bind_method(D_METHOD("set_current"), &Camera::set_current);
 	ClassDB::bind_method(D_METHOD("is_current"), &Camera::is_current);
 	ClassDB::bind_method(D_METHOD("get_camera_transform"), &Camera::get_camera_transform);
@@ -477,8 +480,8 @@ void Camera::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "current"), "set_current", "is_current");
 	ADD_PROPERTY(PropertyInfo(Variant::REAL, "fov", PROPERTY_HINT_RANGE, "1,179,0.1"), "set_fov", "get_fov");
 	ADD_PROPERTY(PropertyInfo(Variant::REAL, "size", PROPERTY_HINT_RANGE, "0.1,16384,0.01"), "set_size", "get_size");
-	ADD_PROPERTY(PropertyInfo(Variant::REAL, "near"), "set_znear", "get_znear");
-	ADD_PROPERTY(PropertyInfo(Variant::REAL, "far"), "set_zfar", "get_zfar");
+	ADD_PROPERTY(PropertyInfo(Variant::REAL, "near", PROPERTY_HINT_EXP_RANGE, "0.1,8192,0.1,or_greater"), "set_znear", "get_znear");
+	ADD_PROPERTY(PropertyInfo(Variant::REAL, "far", PROPERTY_HINT_EXP_RANGE, "0.1,8192,0.1,or_greater"), "set_zfar", "get_zfar");
 
 	BIND_ENUM_CONSTANT(PROJECTION_PERSPECTIVE);
 	BIND_ENUM_CONSTANT(PROJECTION_ORTHOGONAL);
@@ -610,6 +613,7 @@ Camera::Camera() {
 	velocity_tracker.instance();
 	doppler_tracking = DOPPLER_TRACKING_DISABLED;
 	set_notify_transform(true);
+	set_disable_scale(true);
 }
 
 Camera::~Camera() {

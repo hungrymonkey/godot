@@ -84,6 +84,7 @@ public:
 	FUNCRID(texture)
 	FUNC5(texture_allocate, RID, int, int, Image::Format, uint32_t)
 	FUNC3(texture_set_data, RID, const Ref<Image> &, CubeMapSide)
+	FUNC10(texture_set_data_partial, RID, const Ref<Image> &, int, int, int, int, int, int, int, CubeMapSide)
 	FUNC2RC(Ref<Image>, texture_get_data, RID, CubeMapSide)
 	FUNC2(texture_set_flags, RID, uint32_t)
 	FUNC1RC(uint32_t, texture_get_flags, RID)
@@ -105,6 +106,8 @@ public:
 	FUNC1(textures_keep_original, bool)
 
 	FUNC2(texture_set_proxy, RID, RID)
+
+	FUNC2(texture_set_force_redraw_if_visible, RID, bool)
 
 	/* SKY API */
 
@@ -179,13 +182,14 @@ public:
 
 	FUNCRID(multimesh)
 
-	FUNC4(multimesh_allocate, RID, int, MultimeshTransformFormat, MultimeshColorFormat)
+	FUNC5(multimesh_allocate, RID, int, MultimeshTransformFormat, MultimeshColorFormat, MultimeshCustomDataFormat)
 	FUNC1RC(int, multimesh_get_instance_count, RID)
 
 	FUNC2(multimesh_set_mesh, RID, RID)
 	FUNC3(multimesh_instance_set_transform, RID, int, const Transform &)
 	FUNC3(multimesh_instance_set_transform_2d, RID, int, const Transform2D &)
 	FUNC3(multimesh_instance_set_color, RID, int, const Color &)
+	FUNC3(multimesh_instance_set_custom_data, RID, int, const Color &)
 
 	FUNC1RC(RID, multimesh_get_mesh, RID)
 	FUNC1RC(AABB, multimesh_get_aabb, RID)
@@ -193,6 +197,9 @@ public:
 	FUNC2RC(Transform, multimesh_instance_get_transform, RID, int)
 	FUNC2RC(Transform2D, multimesh_instance_get_transform_2d, RID, int)
 	FUNC2RC(Color, multimesh_instance_get_color, RID, int)
+	FUNC2RC(Color, multimesh_instance_get_custom_data, RID, int)
+
+	FUNC2(multimesh_set_as_bulk_array, RID, const PoolVector<float> &)
 
 	FUNC2(multimesh_set_visible_instances, RID, int)
 	FUNC1RC(int, multimesh_get_visible_instances, RID)
@@ -221,6 +228,7 @@ public:
 	FUNC2RC(Transform, skeleton_bone_get_transform, RID, int)
 	FUNC3(skeleton_bone_set_transform_2d, RID, int, const Transform2D &)
 	FUNC2RC(Transform2D, skeleton_bone_get_transform_2d, RID, int)
+	FUNC2(skeleton_set_base_transform_2d, RID, const Transform2D &)
 
 	/* Light API */
 
@@ -377,6 +385,7 @@ public:
 	FUNC2(viewport_set_hide_canvas, RID, bool)
 	FUNC2(viewport_set_disable_environment, RID, bool)
 	FUNC2(viewport_set_disable_3d, RID, bool)
+	FUNC2(viewport_set_keep_3d_linear, RID, bool)
 
 	FUNC2(viewport_attach_camera, RID, RID)
 	FUNC2(viewport_set_scenario, RID, RID)
@@ -413,7 +422,7 @@ public:
 	FUNC2(environment_set_canvas_max_layer, RID, int)
 	FUNC4(environment_set_ambient_light, RID, const Color &, float, float)
 	FUNC7(environment_set_ssr, RID, bool, int, float, float, float, bool)
-	FUNC12(environment_set_ssao, RID, bool, float, float, float, float, float, float, const Color &, EnvironmentSSAOQuality, EnvironmentSSAOBlur, float)
+	FUNC13(environment_set_ssao, RID, bool, float, float, float, float, float, float, float, const Color &, EnvironmentSSAOQuality, EnvironmentSSAOBlur, float)
 
 	FUNC6(environment_set_dof_blur_near, RID, bool, float, float, float, EnvironmentDOFBlurQuality)
 	FUNC6(environment_set_dof_blur_far, RID, bool, float, float, float, EnvironmentDOFBlurQuality)
@@ -498,7 +507,7 @@ public:
 	FUNC11(canvas_item_add_nine_patch, RID, const Rect2 &, const Rect2 &, RID, const Vector2 &, const Vector2 &, NinePatchAxisMode, NinePatchAxisMode, bool, const Color &, RID)
 	FUNC7(canvas_item_add_primitive, RID, const Vector<Point2> &, const Vector<Color> &, const Vector<Point2> &, RID, float, RID)
 	FUNC7(canvas_item_add_polygon, RID, const Vector<Point2> &, const Vector<Color> &, const Vector<Point2> &, RID, RID, bool)
-	FUNC8(canvas_item_add_triangle_array, RID, const Vector<int> &, const Vector<Point2> &, const Vector<Color> &, const Vector<Point2> &, RID, int, RID)
+	FUNC10(canvas_item_add_triangle_array, RID, const Vector<int> &, const Vector<Point2> &, const Vector<Color> &, const Vector<Point2> &, const Vector<int> &, const Vector<float> &, RID, int, RID)
 	FUNC4(canvas_item_add_mesh, RID, const RID &, RID, RID)
 	FUNC4(canvas_item_add_multimesh, RID, RID, RID, RID)
 	FUNC6(canvas_item_add_particles, RID, RID, RID, RID, int, int)

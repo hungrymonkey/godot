@@ -47,6 +47,7 @@
 class Image;
 
 typedef Error (*SavePNGFunc)(const String &p_path, const Ref<Image> &p_img);
+typedef Ref<Image> (*ImageMemLoadFunc)(const uint8_t *p_png, int p_size);
 
 class Image : public Resource {
 	GDCLASS(Image, Resource);
@@ -107,6 +108,8 @@ public:
 		INTERPOLATE_NEAREST,
 		INTERPOLATE_BILINEAR,
 		INTERPOLATE_CUBIC,
+		INTERPOLATE_TRILINEAR,
+		/* INTERPOLATE_TRICUBIC, */
 		/* INTERPOLATE GAUSS */
 	};
 
@@ -118,8 +121,9 @@ public:
 
 	//some functions provided by something else
 
-	static Ref<Image> (*_png_mem_loader_func)(const uint8_t *p_png, int p_size);
-	static Ref<Image> (*_jpg_mem_loader_func)(const uint8_t *p_png, int p_size);
+	static ImageMemLoadFunc _png_mem_loader_func;
+	static ImageMemLoadFunc _jpg_mem_loader_func;
+	static ImageMemLoadFunc _webp_mem_loader_func;
 
 	static void (*_image_compress_bc_func)(Image *, CompressSource p_source);
 	static void (*_image_compress_pvrtc2_func)(Image *);
@@ -175,6 +179,8 @@ private:
 	void _set_data(const Dictionary &p_data);
 	Dictionary _get_data() const;
 
+	Error _load_from_buffer(const PoolVector<uint8_t> &p_array, ImageMemLoadFunc p_loader);
+
 public:
 	int get_width() const; ///< Get image width
 	int get_height() const; ///< Get image height
@@ -217,9 +223,10 @@ public:
 	/**
 	 * Generate a mipmap to an image (creates an image 1/4 the size, with averaging of 4->1)
 	 */
-	Error generate_mipmaps();
+	Error generate_mipmaps(bool p_renormalize = false);
 
 	void clear_mipmaps();
+	void normalize(); //for normal maps
 
 	/**
 	 * Create a new image of a given size and format. Current image will be lost
@@ -284,6 +291,8 @@ public:
 	void premultiply_alpha();
 	void srgb_to_linear();
 	void normalmap_to_xy();
+	Ref<Image> rgbe_to_srgb();
+	void bumpmap_to_normalmap(float bump_scale = 1.0);
 
 	void blit_rect(const Ref<Image> &p_src, const Rect2 &p_src_rect, const Point2 &p_dest);
 	void blit_rect_mask(const Ref<Image> &p_src, const Ref<Image> &p_mask, const Rect2 &p_src_rect, const Point2 &p_dest);
@@ -299,6 +308,7 @@ public:
 
 	Error load_png_from_buffer(const PoolVector<uint8_t> &p_array);
 	Error load_jpg_from_buffer(const PoolVector<uint8_t> &p_array);
+	Error load_webp_from_buffer(const PoolVector<uint8_t> &p_array);
 
 	Image(const uint8_t *p_mem_png_jpg, int p_len = -1);
 	Image(const char **p_xpm);
@@ -320,7 +330,9 @@ public:
 
 	DetectChannels get_detected_channels();
 
+	Color get_pixelv(const Point2 &p_src) const;
 	Color get_pixel(int p_x, int p_y) const;
+	void set_pixelv(const Point2 &p_dest, const Color &p_color);
 	void set_pixel(int p_x, int p_y, const Color &p_color);
 
 	void copy_internals_from(const Ref<Image> &p_image) {

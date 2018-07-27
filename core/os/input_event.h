@@ -53,10 +53,13 @@ enum ButtonList {
 	BUTTON_WHEEL_DOWN = 5,
 	BUTTON_WHEEL_LEFT = 6,
 	BUTTON_WHEEL_RIGHT = 7,
+	BUTTON_XBUTTON1 = 8,
+	BUTTON_XBUTTON2 = 9,
 	BUTTON_MASK_LEFT = (1 << (BUTTON_LEFT - 1)),
 	BUTTON_MASK_RIGHT = (1 << (BUTTON_RIGHT - 1)),
 	BUTTON_MASK_MIDDLE = (1 << (BUTTON_MIDDLE - 1)),
-
+	BUTTON_MASK_XBUTTON1 = (1 << (BUTTON_XBUTTON1 - 1)),
+	BUTTON_MASK_XBUTTON2 = (1 << (BUTTON_XBUTTON2 - 1))
 };
 
 enum JoystickList {
@@ -154,16 +157,21 @@ public:
 	void set_device(int p_device);
 	int get_device() const;
 
+	bool is_action(const StringName &p_action) const;
+	bool is_action_pressed(const StringName &p_action) const;
+	bool is_action_released(const StringName &p_action) const;
+	float get_action_strength(const StringName &p_action) const;
+
+	// To be removed someday, since they do not make sense for all events
 	virtual bool is_pressed() const;
-	virtual bool is_action(const StringName &p_action) const;
-	virtual bool is_action_pressed(const StringName &p_action) const;
-	virtual bool is_action_released(const StringName &p_action) const;
 	virtual bool is_echo() const;
+	// ...-.
+
 	virtual String as_text() const;
 
 	virtual Ref<InputEvent> xformed_by(const Transform2D &p_xform, const Vector2 &p_local_ofs = Vector2()) const;
 
-	virtual bool action_match(const Ref<InputEvent> &p_event) const;
+	virtual bool action_match(const Ref<InputEvent> &p_event, bool *p_pressed, float *p_strength, float p_deadzone) const;
 	virtual bool shortcut_match(const Ref<InputEvent> &p_event) const;
 	virtual bool is_action_type() const;
 
@@ -244,7 +252,7 @@ public:
 
 	uint32_t get_scancode_with_modifiers() const;
 
-	virtual bool action_match(const Ref<InputEvent> &p_event) const;
+	virtual bool action_match(const Ref<InputEvent> &p_event, bool *p_pressed, float *p_strength, float p_deadzone) const;
 	virtual bool shortcut_match(const Ref<InputEvent> &p_event) const;
 
 	virtual bool is_action_type() const { return true; }
@@ -305,7 +313,7 @@ public:
 	bool is_doubleclick() const;
 
 	virtual Ref<InputEvent> xformed_by(const Transform2D &p_xform, const Vector2 &p_local_ofs = Vector2()) const;
-	virtual bool action_match(const Ref<InputEvent> &p_event) const;
+	virtual bool action_match(const Ref<InputEvent> &p_event, bool *p_pressed, float *p_strength, float p_deadzone) const;
 
 	virtual bool is_action_type() const { return true; }
 	virtual String as_text() const;
@@ -352,7 +360,8 @@ public:
 	float get_axis_value() const;
 
 	virtual bool is_pressed() const;
-	virtual bool action_match(const Ref<InputEvent> &p_event) const;
+
+	virtual bool action_match(const Ref<InputEvent> &p_event, bool *p_pressed, float *p_strength, float p_deadzone) const;
 
 	virtual bool is_action_type() const { return true; }
 	virtual String as_text() const;
@@ -379,7 +388,7 @@ public:
 	void set_pressure(float p_pressure);
 	float get_pressure() const;
 
-	virtual bool action_match(const Ref<InputEvent> &p_event) const;
+	virtual bool action_match(const Ref<InputEvent> &p_event, bool *p_pressed, float *p_strength, float p_deadzone) const;
 
 	virtual bool is_action_type() const { return true; }
 	virtual String as_text() const;

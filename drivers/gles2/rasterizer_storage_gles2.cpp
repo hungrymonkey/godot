@@ -5,8 +5,8 @@
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
+/* Copyright (c) 2007-2018 Juan Linietsky, Ariel Manzur.                 */
+/* Copyright (c) 2014-2018 Godot Engine contributors (cf. AUTHORS.md)    */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -452,6 +452,11 @@ void RasterizerStorageGLES2::texture_set_data(RID p_texture, const Ref<Image> &p
 	texture->mipmaps = mipmaps;
 }
 
+void RasterizerStorageGLES2::texture_set_data_partial(RID p_texture, const Ref<Image> &p_image, int src_x, int src_y, int src_w, int src_h, int dst_x, int dst_y, int p_dst_mip, VS::CubeMapSide p_cube_side) {
+	// TODO
+	ERR_PRINT("Not implemented (ask Karroffel to do it :p)");
+}
+
 Ref<Image> RasterizerStorageGLES2::texture_get_data(RID p_texture, VS::CubeMapSide p_cube_side) const {
 
 	Texture *texture = texture_owner.getornull(p_texture);
@@ -667,6 +672,14 @@ void RasterizerStorageGLES2::texture_set_proxy(RID p_texture, RID p_proxy) {
 		proxy->proxy_owners.insert(texture);
 		texture->proxy = proxy;
 	}
+}
+
+void RasterizerStorageGLES2::texture_set_force_redraw_if_visible(RID p_texture, bool p_enable) {
+
+	Texture *texture = texture_owner.getornull(p_texture);
+	ERR_FAIL_COND(!texture);
+
+	texture->redraw_if_visible = p_enable;
 }
 
 void RasterizerStorageGLES2::texture_set_detect_3d_callback(RID p_texture, VisualServer::TextureDetectCallback p_callback, void *p_userdata) {
@@ -1177,7 +1190,7 @@ RID RasterizerStorageGLES2::multimesh_create() {
 	return RID();
 }
 
-void RasterizerStorageGLES2::multimesh_allocate(RID p_multimesh, int p_instances, VS::MultimeshTransformFormat p_transform_format, VS::MultimeshColorFormat p_color_format) {
+void RasterizerStorageGLES2::multimesh_allocate(RID p_multimesh, int p_instances, VS::MultimeshTransformFormat p_transform_format, VS::MultimeshColorFormat p_color_format, VS::MultimeshCustomDataFormat p_data) {
 }
 
 int RasterizerStorageGLES2::multimesh_get_instance_count(RID p_multimesh) const {
@@ -1196,6 +1209,9 @@ void RasterizerStorageGLES2::multimesh_instance_set_transform_2d(RID p_multimesh
 void RasterizerStorageGLES2::multimesh_instance_set_color(RID p_multimesh, int p_index, const Color &p_color) {
 }
 
+void RasterizerStorageGLES2::multimesh_instance_set_custom_data(RID p_multimesh, int p_index, const Color &p_color) {
+}
+
 RID RasterizerStorageGLES2::multimesh_get_mesh(RID p_multimesh) const {
 	return RID();
 }
@@ -1210,6 +1226,13 @@ Transform2D RasterizerStorageGLES2::multimesh_instance_get_transform_2d(RID p_mu
 
 Color RasterizerStorageGLES2::multimesh_instance_get_color(RID p_multimesh, int p_index) const {
 	return Color();
+}
+
+Color RasterizerStorageGLES2::multimesh_instance_get_custom_data(RID p_multimesh, int p_index) const {
+	return Color();
+}
+
+void RasterizerStorageGLES2::multimesh_set_as_bulk_array(RID p_multimesh, const PoolVector<float> &p_array) {
 }
 
 void RasterizerStorageGLES2::multimesh_set_visible_instances(RID p_multimesh, int p_visible) {
@@ -1295,6 +1318,9 @@ void RasterizerStorageGLES2::skeleton_bone_set_transform_2d(RID p_skeleton, int 
 
 Transform2D RasterizerStorageGLES2::skeleton_bone_get_transform_2d(RID p_skeleton, int p_bone) const {
 	return Transform2D();
+}
+
+void RasterizerStorageGLES2::skeleton_set_base_transform_2d(RID p_skeleton, const Transform2D &p_base_transform) {
 }
 
 void RasterizerStorageGLES2::update_dirty_skeletons() {
@@ -1978,6 +2004,8 @@ void RasterizerStorageGLES2::initialize() {
 			config.extensions.insert(strings[i]);
 		}
 	}
+
+	config.shrink_textures_x2 = false;
 
 	frame.count = 0;
 	frame.prev_tick = 0;

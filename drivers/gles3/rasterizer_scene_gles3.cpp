@@ -896,7 +896,7 @@ void RasterizerSceneGLES3::environment_set_ssr(RID p_env, bool p_enable, int p_m
 	env->ssr_roughness = p_roughness;
 }
 
-void RasterizerSceneGLES3::environment_set_ssao(RID p_env, bool p_enable, float p_radius, float p_intensity, float p_radius2, float p_intensity2, float p_bias, float p_light_affect, const Color &p_color, VS::EnvironmentSSAOQuality p_quality, VisualServer::EnvironmentSSAOBlur p_blur, float p_bilateral_sharpness) {
+void RasterizerSceneGLES3::environment_set_ssao(RID p_env, bool p_enable, float p_radius, float p_intensity, float p_radius2, float p_intensity2, float p_bias, float p_light_affect, float p_ao_channel_affect, const Color &p_color, VS::EnvironmentSSAOQuality p_quality, VisualServer::EnvironmentSSAOBlur p_blur, float p_bilateral_sharpness) {
 
 	Environment *env = environment_owner.getornull(p_env);
 	ERR_FAIL_COND(!env);
@@ -908,6 +908,7 @@ void RasterizerSceneGLES3::environment_set_ssao(RID p_env, bool p_enable, float 
 	env->ssao_intensity2 = p_intensity2;
 	env->ssao_bias = p_bias;
 	env->ssao_light_affect = p_light_affect;
+	env->ssao_ao_channel_affect = p_ao_channel_affect;
 	env->ssao_color = p_color;
 	env->ssao_filter = p_blur;
 	env->ssao_quality = p_quality;
@@ -1224,7 +1225,12 @@ bool RasterizerSceneGLES3::_setup_material(RasterizerStorageGLES3::Material *p_m
 
 		} else {
 
+			if (t->redraw_if_visible) { //must check before proxy because this is often used with proxies
+				VisualServerRaster::redraw_request();
+			}
+
 			t = t->get_ptr(); //resolve for proxies
+
 #ifdef TOOLS_ENABLED
 			if (t->detect_3d) {
 				t->detect_3d(t->detect_3d_ud);
@@ -1335,7 +1341,7 @@ void RasterizerSceneGLES3::_setup_geometry(RenderList::Element *e, const Transfo
 
 			glBindBuffer(GL_ARRAY_BUFFER, multi_mesh->buffer); //modify the buffer
 
-			int stride = (multi_mesh->xform_floats + multi_mesh->color_floats) * 4;
+			int stride = (multi_mesh->xform_floats + multi_mesh->color_floats + multi_mesh->custom_data_floats) * 4;
 			glEnableVertexAttribArray(8);
 			glVertexAttribPointer(8, 4, GL_FLOAT, GL_FALSE, stride, ((uint8_t *)NULL) + 0);
 			glVertexAttribDivisor(8, 1);
@@ -1356,6 +1362,8 @@ void RasterizerSceneGLES3::_setup_geometry(RenderList::Element *e, const Transfo
 				color_ofs = 8 * 4;
 			}
 
+			int custom_data_ofs = color_ofs;
+
 			switch (multi_mesh->color_format) {
 
 				case VS::MULTIMESH_COLOR_NONE: {
@@ -1366,12 +1374,33 @@ void RasterizerSceneGLES3::_setup_geometry(RenderList::Element *e, const Transfo
 					glEnableVertexAttribArray(11);
 					glVertexAttribPointer(11, 4, GL_UNSIGNED_BYTE, GL_TRUE, stride, ((uint8_t *)NULL) + color_ofs);
 					glVertexAttribDivisor(11, 1);
+					custom_data_ofs += 4;
 
 				} break;
 				case VS::MULTIMESH_COLOR_FLOAT: {
 					glEnableVertexAttribArray(11);
 					glVertexAttribPointer(11, 4, GL_FLOAT, GL_FALSE, stride, ((uint8_t *)NULL) + color_ofs);
 					glVertexAttribDivisor(11, 1);
+					custom_data_ofs += 4 * 4;
+				} break;
+			}
+
+			switch (multi_mesh->custom_data_format) {
+
+				case VS::MULTIMESH_CUSTOM_DATA_NONE: {
+					glDisableVertexAttribArray(12);
+					glVertexAttrib4f(12, 1, 1, 1, 1);
+				} break;
+				case VS::MULTIMESH_CUSTOM_DATA_8BIT: {
+					glEnableVertexAttribArray(12);
+					glVertexAttribPointer(12, 4, GL_UNSIGNED_BYTE, GL_TRUE, stride, ((uint8_t *)NULL) + custom_data_ofs);
+					glVertexAttribDivisor(12, 1);
+
+				} break;
+				case VS::MULTIMESH_CUSTOM_DATA_FLOAT: {
+					glEnableVertexAttribArray(12);
+					glVertexAttribPointer(12, 4, GL_FLOAT, GL_FALSE, stride, ((uint8_t *)NULL) + custom_data_ofs);
+					glVertexAttribDivisor(12, 1);
 				} break;
 			}
 
@@ -1545,6 +1574,11 @@ void RasterizerSceneGLES3::_render_geometry(RenderList::Element *e) {
 					RasterizerStorageGLES3::Texture *t = storage->texture_owner.get(c.texture);
 
 					t = t->get_ptr(); //resolve for proxies
+
+					if (t->redraw_if_visible) {
+						VisualServerRaster::redraw_request();
+					}
+
 #ifdef TOOLS_ENABLED
 					if (t->detect_3d) {
 						t->detect_3d(t->detect_3d_ud);
@@ -2085,9 +2119,9 @@ void RasterizerSceneGLES3::_render_list(RenderList::Element **p_elements, int p_
 						case RasterizerStorageGLES3::Shader::Spatial::BLEND_MODE_MUL: {
 							glBlendEquation(GL_FUNC_ADD);
 							if (storage->frame.current_rt && storage->frame.current_rt->flags[RasterizerStorage::RENDER_TARGET_TRANSPARENT]) {
-								glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+								glBlendFuncSeparate(GL_DST_COLOR, GL_ZERO, GL_DST_ALPHA, GL_ZERO);
 							} else {
-								glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+								glBlendFuncSeparate(GL_DST_COLOR, GL_ZERO, GL_ZERO, GL_ONE);
 							}
 
 						} break;
@@ -2362,6 +2396,9 @@ void RasterizerSceneGLES3::_draw_sky(RasterizerStorageGLES3::Sky *p_sky, const C
 
 	ERR_FAIL_COND(!tex);
 	glActiveTexture(GL_TEXTURE0);
+
+	tex = tex->get_ptr(); //resolve for proxies
+
 	glBindTexture(tex->target, tex->tex_id);
 
 	if (storage->config.srgb_decode_supported && tex->srgb && !tex->using_srgb) {
@@ -2504,6 +2541,7 @@ void RasterizerSceneGLES3::_setup_environment(Environment *env, const CameraMatr
 
 		state.env_radiance_data.ambient_contribution = env->ambient_sky_contribution;
 		state.ubo_data.ambient_occlusion_affect_light = env->ssao_light_affect;
+		state.ubo_data.ambient_occlusion_affect_ssao = env->ssao_ao_channel_affect;
 
 		//fog
 
@@ -3906,6 +3944,7 @@ void RasterizerSceneGLES3::_post_process(Environment *env, const CameraMatrix &p
 	state.tonemap_shader.set_conditional(TonemapShaderGLES3::USE_FILMIC_TONEMAPPER, env->tone_mapper == VS::ENV_TONE_MAPPER_FILMIC);
 	state.tonemap_shader.set_conditional(TonemapShaderGLES3::USE_ACES_TONEMAPPER, env->tone_mapper == VS::ENV_TONE_MAPPER_ACES);
 	state.tonemap_shader.set_conditional(TonemapShaderGLES3::USE_REINDHART_TONEMAPPER, env->tone_mapper == VS::ENV_TONE_MAPPER_REINHARDT);
+	state.tonemap_shader.set_conditional(TonemapShaderGLES3::KEEP_3D_LINEAR, storage->frame.current_rt->flags[RasterizerStorage::RENDER_TARGET_KEEP_3D_LINEAR]);
 
 	state.tonemap_shader.set_conditional(TonemapShaderGLES3::USE_AUTO_EXPOSURE, env->auto_exposure);
 	state.tonemap_shader.set_conditional(TonemapShaderGLES3::USE_GLOW_FILTER_BICUBIC, env->glow_bicubic_upscale);
@@ -4047,6 +4086,7 @@ void RasterizerSceneGLES3::render_scene(const Transform &p_cam_transform, const 
 	state.ubo_data.z_slope_scale = 0;
 	state.ubo_data.shadow_dual_paraboloid_render_side = 0;
 	state.ubo_data.shadow_dual_paraboloid_render_zfar = 0;
+	state.ubo_data.opaque_prepass_threshold = 0.99;
 
 	p_cam_projection.get_viewport_size(state.ubo_data.viewport_size[0], state.ubo_data.viewport_size[1]);
 
@@ -4659,6 +4699,7 @@ void RasterizerSceneGLES3::render_shadow(RID p_light, RID p_shadow_atlas, int p_
 	state.ubo_data.z_slope_scale = normal_bias;
 	state.ubo_data.shadow_dual_paraboloid_render_side = dp_direction;
 	state.ubo_data.shadow_dual_paraboloid_render_zfar = zfar;
+	state.ubo_data.opaque_prepass_threshold = 0.1;
 
 	_setup_environment(NULL, light_projection, light_transform);
 
@@ -4827,7 +4868,7 @@ void RasterizerSceneGLES3::initialize() {
 	glBufferData(GL_UNIFORM_BUFFER, sizeof(State::EnvironmentRadianceUBO), &state.env_radiance_ubo, GL_DYNAMIC_DRAW);
 	glBindBuffer(GL_UNIFORM_BUFFER, 0);
 
-	render_list.max_elements = GLOBAL_DEF("rendering/limits/rendering/max_renderable_elements", (int)RenderList::DEFAULT_MAX_ELEMENTS);
+	render_list.max_elements = GLOBAL_DEF_RST("rendering/limits/rendering/max_renderable_elements", (int)RenderList::DEFAULT_MAX_ELEMENTS);
 	if (render_list.max_elements > 1000000)
 		render_list.max_elements = 1000000;
 	if (render_list.max_elements < 1024)

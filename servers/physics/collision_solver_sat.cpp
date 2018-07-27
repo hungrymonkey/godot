@@ -217,8 +217,6 @@ static void _generate_contacts_face_face(const Vector3 *p_points_A, int p_point_
 	// generate contacts
 	//Plane plane_A(p_points_A[0],p_points_A[1],p_points_A[2]);
 
-	int added = 0;
-
 	for (int i = 0; i < clipbuf_len; i++) {
 
 		real_t d = plane_B.distance_to(clipbuf_src[i]);
@@ -233,7 +231,6 @@ static void _generate_contacts_face_face(const Vector3 *p_points_A, int p_point_
 			continue;
 
 		p_callback->call(clipbuf_src[i], closest_B);
-		added++;
 	}
 }
 
@@ -341,26 +338,26 @@ public:
 		min_B -= (max_A - min_A) * 0.5;
 		max_B += (max_A - min_A) * 0.5;
 
-		real_t dmin = min_B - (min_A + max_A) * 0.5;
-		real_t dmax = max_B - (min_A + max_A) * 0.5;
+		min_B -= (min_A + max_A) * 0.5;
+		max_B -= (min_A + max_A) * 0.5;
 
-		if (dmin > 0.0 || dmax < 0.0) {
+		if (min_B > 0.0 || max_B < 0.0) {
 			separator_axis = axis;
 			return false; // doesn't contain 0
 		}
 
 		//use the smallest depth
 
-		dmin = Math::abs(dmin);
+		min_B = -min_B;
 
-		if (dmax < dmin) {
-			if (dmax < best_depth) {
-				best_depth = dmax;
+		if (max_B < min_B) {
+			if (max_B < best_depth) {
+				best_depth = max_B;
 				best_axis = axis;
 			}
 		} else {
-			if (dmin < best_depth) {
-				best_depth = dmin;
+			if (min_B < best_depth) {
+				best_depth = min_B;
 				best_axis = -axis; // keep it as A axis
 			}
 		}

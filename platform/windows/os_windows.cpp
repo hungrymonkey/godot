@@ -70,6 +70,30 @@ __attribute__((visibility("default"))) DWORD NvOptimusEnablement = 0x00000001;
 #define WM_TOUCH 576
 #endif
 
+typedef struct {
+	int count;
+	int screen;
+	Size2 size;
+} EnumSizeData;
+
+typedef struct {
+	int count;
+	int screen;
+	Point2 pos;
+} EnumPosData;
+
+static BOOL CALLBACK _MonitorEnumProcSize(HMONITOR hMonitor, HDC hdcMonitor, LPRECT lprcMonitor, LPARAM dwData) {
+
+	EnumSizeData *data = (EnumSizeData *)dwData;
+	if (data->count == data->screen) {
+		data->size.x = lprcMonitor->right - lprcMonitor->left;
+		data->size.y = lprcMonitor->bottom - lprcMonitor->top;
+	}
+
+	data->count++;
+	return TRUE;
+}
+
 static String format_error_message(DWORD id) {
 
 	LPWSTR messageBuffer = NULL;
@@ -152,6 +176,25 @@ void RedirectIOToConsole() {
 	// point to console as well
 }
 
+BOOL WINAPI HandlerRoutine(_In_ DWORD dwCtrlType) {
+	if (ScriptDebugger::get_singleton() == NULL)
+		return FALSE;
+
+	switch (dwCtrlType) {
+		case CTRL_C_EVENT:
+			ScriptDebugger::get_singleton()->set_depth(-1);
+			ScriptDebugger::get_singleton()->set_lines_left(1);
+			return TRUE;
+		default:
+			return FALSE;
+	}
+}
+
+void OS_Windows::initialize_debugging() {
+
+	SetConsoleCtrlHandler(HandlerRoutine, TRUE);
+}
+
 void OS_Windows::initialize_core() {
 
 	crash_handler.initialize();
@@ -187,6 +230,10 @@ void OS_Windows::initialize_core() {
 	// the start of the computer when we call GetGameTime()
 	ticks_start = 0;
 	ticks_start = get_ticks_usec();
+
+	// set minimum resolution for periodic timers, otherwise Sleep(n) may wait at least as
+	//  long as the windows scheduler resolution (~16-30ms) even for calls like Sleep(1)
+	timeBeginPeriod(1);
 
 	process_map = memnew((Map<ProcessID, ProcessInfo>));
 
@@ -342,6 +389,14 @@ LRESULT OS_Windows::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 		} break;
 		case WM_MOUSEMOVE: {
 
+			if (input->is_emulating_mouse_from_touch()) {
+				// Universal translation enabled; ignore OS translation
+				LPARAM extra = GetMessageExtraInfo();
+				if (IsPenEvent(extra)) {
+					break;
+				}
+			}
+
 			if (outside) {
 				//mouse enter
 
@@ -367,18 +422,6 @@ LRESULT OS_Windows::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 			// Don't calculate relative mouse movement if we don't have focus in CAPTURED mode.
 			if (!window_has_focus && mouse_mode == MOUSE_MODE_CAPTURED)
 				break;
-			/*
-			LPARAM extra = GetMessageExtraInfo();
-			if (IsPenEvent(extra)) {
-
-				int idx = extra & 0x7f;
-				_drag_event(idx, uMsg, wParam, lParam);
-				if (idx != 0) {
-					return 0;
-				};
-				// fallthrough for mouse event
-			};
-			*/
 
 			Ref<InputEventMouseMotion> mm;
 			mm.instance();
@@ -391,11 +434,12 @@ LRESULT OS_Windows::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 			bmask |= (wParam & MK_LBUTTON) ? (1 << 0) : 0;
 			bmask |= (wParam & MK_RBUTTON) ? (1 << 1) : 0;
 			bmask |= (wParam & MK_MBUTTON) ? (1 << 2) : 0;
+			bmask |= (wParam & MK_XBUTTON1) ? (1 << 7) : 0;
+			bmask |= (wParam & MK_XBUTTON2) ? (1 << 8) : 0;
 			mm->set_button_mask(bmask);
 
 			last_button_state = mm->get_button_mask();
-			/*mm->get_button_mask()|=(wParam&MK_XBUTTON1)?(1<<5):0;
-			mm->get_button_mask()|=(wParam&MK_XBUTTON2)?(1<<6):0;*/
+
 			mm->set_position(Vector2(GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)));
 			mm->set_global_position(Vector2(GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)));
 
@@ -436,6 +480,13 @@ LRESULT OS_Windows::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 		} break;
 		case WM_LBUTTONDOWN:
 		case WM_LBUTTONUP:
+			if (input->is_emulating_mouse_from_touch()) {
+				// Universal translation enabled; ignore OS translations for left button
+				LPARAM extra = GetMessageExtraInfo();
+				if (IsPenEvent(extra)) {
+					break;
+				}
+			}
 		case WM_MBUTTONDOWN:
 		case WM_MBUTTONUP:
 		case WM_RBUTTONDOWN:
@@ -445,173 +496,178 @@ LRESULT OS_Windows::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 		case WM_LBUTTONDBLCLK:
 		case WM_MBUTTONDBLCLK:
 		case WM_RBUTTONDBLCLK:
-			/*case WM_XBUTTONDOWN:
-		case WM_XBUTTONUP: */ {
+		case WM_XBUTTONDBLCLK:
+		case WM_XBUTTONDOWN:
+		case WM_XBUTTONUP: {
 
-				/*
-			LPARAM extra = GetMessageExtraInfo();
-			if (IsPenEvent(extra)) {
+			Ref<InputEventMouseButton> mb;
+			mb.instance();
 
-				int idx = extra & 0x7f;
-				_touch_event(idx, uMsg, wParam, lParam);
-				if (idx != 0) {
-					return 0;
-				};
-				// fallthrough for mouse event
-			};
-			*/
-
-				Ref<InputEventMouseButton> mb;
-				mb.instance();
-
-				switch (uMsg) {
-					case WM_LBUTTONDOWN: {
-						mb->set_pressed(true);
-						mb->set_button_index(1);
-					} break;
-					case WM_LBUTTONUP: {
-						mb->set_pressed(false);
-						mb->set_button_index(1);
-					} break;
-					case WM_MBUTTONDOWN: {
-						mb->set_pressed(true);
-						mb->set_button_index(3);
-
-					} break;
-					case WM_MBUTTONUP: {
-						mb->set_pressed(false);
-						mb->set_button_index(3);
-					} break;
-					case WM_RBUTTONDOWN: {
-						mb->set_pressed(true);
-						mb->set_button_index(2);
-					} break;
-					case WM_RBUTTONUP: {
-						mb->set_pressed(false);
-						mb->set_button_index(2);
-					} break;
-					case WM_LBUTTONDBLCLK: {
-
-						mb->set_pressed(true);
-						mb->set_button_index(1);
-						mb->set_doubleclick(true);
-					} break;
-					case WM_RBUTTONDBLCLK: {
-
-						mb->set_pressed(true);
-						mb->set_button_index(2);
-						mb->set_doubleclick(true);
-					} break;
-					case WM_MBUTTONDBLCLK: {
-
-						mb->set_pressed(true);
-						mb->set_button_index(3);
-						mb->set_doubleclick(true);
-					} break;
-					case WM_MOUSEWHEEL: {
-
-						mb->set_pressed(true);
-						int motion = (short)HIWORD(wParam);
-						if (!motion)
-							return 0;
-
-						if (motion > 0)
-							mb->set_button_index(BUTTON_WHEEL_UP);
-						else
-							mb->set_button_index(BUTTON_WHEEL_DOWN);
-
-					} break;
-					case WM_MOUSEHWHEEL: {
-
-						mb->set_pressed(true);
-						int motion = (short)HIWORD(wParam);
-						if (!motion)
-							return 0;
-
-						if (motion < 0) {
-							mb->set_button_index(BUTTON_WHEEL_LEFT);
-							mb->set_factor(fabs((double)motion / (double)WHEEL_DELTA));
-						} else {
-							mb->set_button_index(BUTTON_WHEEL_RIGHT);
-							mb->set_factor(fabs((double)motion / (double)WHEEL_DELTA));
-						}
-					} break;
-					/*
-				case WM_XBUTTONDOWN: {
-					mb->is_pressed()=true;
-					mb->get_button_index()=(HIWORD(wParam)==XBUTTON1)?6:7;
+			switch (uMsg) {
+				case WM_LBUTTONDOWN: {
+					mb->set_pressed(true);
+					mb->set_button_index(1);
 				} break;
-				case WM_XBUTTONUP:
-					mb->is_pressed()=true;
-					mb->get_button_index()=(HIWORD(wParam)==XBUTTON1)?6:7;
-				} break;*/
-					default: { return 0; }
-				}
+				case WM_LBUTTONUP: {
+					mb->set_pressed(false);
+					mb->set_button_index(1);
+				} break;
+				case WM_MBUTTONDOWN: {
+					mb->set_pressed(true);
+					mb->set_button_index(3);
 
-				mb->set_control((wParam & MK_CONTROL) != 0);
-				mb->set_shift((wParam & MK_SHIFT) != 0);
-				mb->set_alt(alt_mem);
-				//mb->get_alt()=(wParam&MK_MENU)!=0;
-				int bmask = 0;
-				bmask |= (wParam & MK_LBUTTON) ? (1 << 0) : 0;
-				bmask |= (wParam & MK_RBUTTON) ? (1 << 1) : 0;
-				bmask |= (wParam & MK_MBUTTON) ? (1 << 2) : 0;
-				mb->set_button_mask(bmask);
+				} break;
+				case WM_MBUTTONUP: {
+					mb->set_pressed(false);
+					mb->set_button_index(3);
+				} break;
+				case WM_RBUTTONDOWN: {
+					mb->set_pressed(true);
+					mb->set_button_index(2);
+				} break;
+				case WM_RBUTTONUP: {
+					mb->set_pressed(false);
+					mb->set_button_index(2);
+				} break;
+				case WM_LBUTTONDBLCLK: {
 
-				last_button_state = mb->get_button_mask();
-				/*
-			mb->get_button_mask()|=(wParam&MK_XBUTTON1)?(1<<5):0;
-			mb->get_button_mask()|=(wParam&MK_XBUTTON2)?(1<<6):0;*/
-				mb->set_position(Vector2(GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)));
+					mb->set_pressed(true);
+					mb->set_button_index(1);
+					mb->set_doubleclick(true);
+				} break;
+				case WM_RBUTTONDBLCLK: {
 
-				if (mouse_mode == MOUSE_MODE_CAPTURED) {
+					mb->set_pressed(true);
+					mb->set_button_index(2);
+					mb->set_doubleclick(true);
+				} break;
+				case WM_MBUTTONDBLCLK: {
 
-					mb->set_position(Vector2(old_x, old_y));
-				}
+					mb->set_pressed(true);
+					mb->set_button_index(3);
+					mb->set_doubleclick(true);
+				} break;
+				case WM_MOUSEWHEEL: {
 
-				if (uMsg != WM_MOUSEWHEEL && uMsg != WM_MOUSEHWHEEL) {
-					if (mb->is_pressed()) {
+					mb->set_pressed(true);
+					int motion = (short)HIWORD(wParam);
+					if (!motion)
+						return 0;
 
-						if (++pressrc > 0)
-							SetCapture(hWnd);
+					if (motion > 0)
+						mb->set_button_index(BUTTON_WHEEL_UP);
+					else
+						mb->set_button_index(BUTTON_WHEEL_DOWN);
+
+				} break;
+				case WM_MOUSEHWHEEL: {
+
+					mb->set_pressed(true);
+					int motion = (short)HIWORD(wParam);
+					if (!motion)
+						return 0;
+
+					if (motion < 0) {
+						mb->set_button_index(BUTTON_WHEEL_LEFT);
+						mb->set_factor(fabs((double)motion / (double)WHEEL_DELTA));
 					} else {
-
-						if (--pressrc <= 0) {
-							ReleaseCapture();
-							pressrc = 0;
-						}
+						mb->set_button_index(BUTTON_WHEEL_RIGHT);
+						mb->set_factor(fabs((double)motion / (double)WHEEL_DELTA));
 					}
-				} else if (mouse_mode != MOUSE_MODE_CAPTURED) {
-					// for reasons unknown to mankind, wheel comes in screen cordinates
-					POINT coords;
-					coords.x = mb->get_position().x;
-					coords.y = mb->get_position().y;
+				} break;
+				case WM_XBUTTONDOWN: {
 
-					ScreenToClient(hWnd, &coords);
+					mb->set_pressed(true);
+					if (HIWORD(wParam) == XBUTTON1)
+						mb->set_button_index(BUTTON_XBUTTON1);
+					else
+						mb->set_button_index(BUTTON_XBUTTON2);
+				} break;
+				case WM_XBUTTONUP: {
 
-					mb->set_position(Vector2(coords.x, coords.y));
+					mb->set_pressed(false);
+					if (HIWORD(wParam) == XBUTTON1)
+						mb->set_button_index(BUTTON_XBUTTON1);
+					else
+						mb->set_button_index(BUTTON_XBUTTON2);
+				} break;
+				case WM_XBUTTONDBLCLK: {
+
+					mb->set_pressed(true);
+					if (HIWORD(wParam) == XBUTTON1)
+						mb->set_button_index(BUTTON_XBUTTON1);
+					else
+						mb->set_button_index(BUTTON_XBUTTON2);
+					mb->set_doubleclick(true);
+				} break;
+				default: { return 0; }
+			}
+
+			mb->set_control((wParam & MK_CONTROL) != 0);
+			mb->set_shift((wParam & MK_SHIFT) != 0);
+			mb->set_alt(alt_mem);
+			//mb->get_alt()=(wParam&MK_MENU)!=0;
+			int bmask = 0;
+			bmask |= (wParam & MK_LBUTTON) ? (1 << 0) : 0;
+			bmask |= (wParam & MK_RBUTTON) ? (1 << 1) : 0;
+			bmask |= (wParam & MK_MBUTTON) ? (1 << 2) : 0;
+			bmask |= (wParam & MK_XBUTTON1) ? (1 << 7) : 0;
+			bmask |= (wParam & MK_XBUTTON2) ? (1 << 8) : 0;
+			mb->set_button_mask(bmask);
+
+			last_button_state = mb->get_button_mask();
+			mb->set_position(Vector2(GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)));
+
+			if (mouse_mode == MOUSE_MODE_CAPTURED) {
+
+				mb->set_position(Vector2(old_x, old_y));
+			}
+
+			if (uMsg != WM_MOUSEWHEEL && uMsg != WM_MOUSEHWHEEL) {
+				if (mb->is_pressed()) {
+
+					if (++pressrc > 0)
+						SetCapture(hWnd);
+				} else {
+
+					if (--pressrc <= 0) {
+						ReleaseCapture();
+						pressrc = 0;
+					}
 				}
+			} else if (mouse_mode != MOUSE_MODE_CAPTURED) {
+				// for reasons unknown to mankind, wheel comes in screen cordinates
+				POINT coords;
+				coords.x = mb->get_position().x;
+				coords.y = mb->get_position().y;
 
-				mb->set_global_position(mb->get_position());
+				ScreenToClient(hWnd, &coords);
 
-				if (main_loop) {
-					input->parse_input_event(mb);
-					if (mb->is_pressed() && mb->get_button_index() > 3) {
-						//send release for mouse wheel
-						Ref<InputEventMouseButton> mbd = mb->duplicate();
-						mbd->set_pressed(false);
-						input->parse_input_event(mbd);
-					}
+				mb->set_position(Vector2(coords.x, coords.y));
+			}
+
+			mb->set_global_position(mb->get_position());
+
+			if (main_loop) {
+				input->parse_input_event(mb);
+				if (mb->is_pressed() && mb->get_button_index() > 3 && mb->get_button_index() < 8) {
+					//send release for mouse wheel
+					Ref<InputEventMouseButton> mbd = mb->duplicate();
+					mbd->set_pressed(false);
+					input->parse_input_event(mbd);
 				}
 			}
-			break;
+		} break;
 
 		case WM_SIZE: {
 			int window_w = LOWORD(lParam);
 			int window_h = HIWORD(lParam);
-			if (window_w > 0 && window_h > 0) {
+			if (window_w > 0 && window_h > 0 && !preserve_window_size) {
 				video_mode.width = window_w;
 				video_mode.height = window_h;
+			} else {
+				preserve_window_size = false;
+				set_window_size(Size2(video_mode.width, video_mode.height));
 			}
 			if (wParam == SIZE_MAXIMIZED) {
 				maximized = true;
@@ -623,6 +679,28 @@ LRESULT OS_Windows::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 				maximized = false;
 				minimized = false;
 			}
+			if (is_layered_allowed() && layered_window) {
+				DeleteObject(hBitmap);
+
+				RECT r;
+				GetWindowRect(hWnd, &r);
+				dib_size = Size2(r.right - r.left, r.bottom - r.top);
+
+				BITMAPINFO bmi;
+				ZeroMemory(&bmi, sizeof(BITMAPINFO));
+				bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+				bmi.bmiHeader.biWidth = dib_size.x;
+				bmi.bmiHeader.biHeight = dib_size.y;
+				bmi.bmiHeader.biPlanes = 1;
+				bmi.bmiHeader.biBitCount = 32;
+				bmi.bmiHeader.biCompression = BI_RGB;
+				bmi.bmiHeader.biSizeImage = dib_size.x, dib_size.y * 4;
+				hBitmap = CreateDIBSection(hDC_dib, &bmi, DIB_RGB_COLORS, (void **)&dib_data, NULL, 0x0);
+				SelectObject(hDC_dib, hBitmap);
+
+				ZeroMemory(dib_data, dib_size.x * dib_size.y * 4);
+			}
+			//return 0;								// Jump Back
 		} break;
 
 		case WM_ENTERSIZEMOVE: {
@@ -703,13 +781,18 @@ LRESULT OS_Windows::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 				if (GetTouchInputInfo((HTOUCHINPUT)lParam, cInputs, pInputs, sizeof(TOUCHINPUT))) {
 					for (UINT i = 0; i < cInputs; i++) {
 						TOUCHINPUT ti = pInputs[i];
+						POINT touch_pos = {
+							TOUCH_COORD_TO_PIXEL(ti.x),
+							TOUCH_COORD_TO_PIXEL(ti.y),
+						};
+						ScreenToClient(hWnd, &touch_pos);
 						//do something with each touch input entry
 						if (ti.dwFlags & TOUCHEVENTF_MOVE) {
 
-							_drag_event(ti.x / 100.0f, ti.y / 100.0f, ti.dwID);
+							_drag_event(touch_pos.x, touch_pos.y, ti.dwID);
 						} else if (ti.dwFlags & (TOUCHEVENTF_UP | TOUCHEVENTF_DOWN)) {
 
-							_touch_event(ti.dwFlags & TOUCHEVENTF_DOWN, ti.x / 100.0f, ti.y / 100.0f, ti.dwID);
+							_touch_event(ti.dwFlags & TOUCHEVENTF_DOWN, touch_pos.x, touch_pos.y, ti.dwID);
 						};
 					}
 					bHandled = TRUE;
@@ -741,7 +824,9 @@ LRESULT OS_Windows::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 						SetCursor(NULL);
 				} else {
 					if (hCursor != NULL) {
-						SetCursor(hCursor);
+						CursorShape c = cursor_shape;
+						cursor_shape = CURSOR_MAX;
+						set_cursor_shape(c);
 						hCursor = NULL;
 					}
 				}
@@ -927,6 +1012,10 @@ typedef enum _SHC_PROCESS_DPI_AWARENESS {
 	SHC_PROCESS_PER_MONITOR_DPI_AWARE = 2
 } SHC_PROCESS_DPI_AWARENESS;
 
+int OS_Windows::get_current_video_driver() const {
+	return video_driver_index;
+}
+
 Error OS_Windows::initialize(const VideoMode &p_desired, int p_video_driver, int p_audio_driver) {
 
 	main_loop = NULL;
@@ -935,6 +1024,7 @@ Error OS_Windows::initialize(const VideoMode &p_desired, int p_video_driver, int
 	WNDCLASSEXW wc;
 
 	if (is_hidpi_allowed()) {
+		print_line("hidpi aware?");
 		HMODULE Shcore = LoadLibraryW(L"Shcore.dll");
 
 		if (Shcore != NULL) {
@@ -979,12 +1069,23 @@ Error OS_Windows::initialize(const VideoMode &p_desired, int p_video_driver, int
 	pre_fs_valid = true;
 	if (video_mode.fullscreen) {
 
+		/* this returns DPI unaware size, commenting
 		DEVMODE current;
 		memset(&current, 0, sizeof(current));
 		EnumDisplaySettings(NULL, ENUM_CURRENT_SETTINGS, &current);
 
 		WindowRect.right = current.dmPelsWidth;
 		WindowRect.bottom = current.dmPelsHeight;
+
+		*/
+
+		EnumSizeData data = { 0, 0, Size2() };
+		EnumDisplayMonitors(NULL, NULL, _MonitorEnumProcSize, (LPARAM)&data);
+
+		WindowRect.right = data.size.width;
+		WindowRect.bottom = data.size.height;
+
+		print_line("wr right " + itos(WindowRect.right) + ", " + itos(WindowRect.bottom));
 
 		/*  DEVMODE dmScreenSettings;
 		memset(&dmScreenSettings,0,sizeof(dmScreenSettings));
@@ -1084,6 +1185,8 @@ Error OS_Windows::initialize(const VideoMode &p_desired, int p_video_driver, int
 		RasterizerGLES3::make_current();
 	}
 
+	video_driver_index = p_video_driver; // FIXME TODO - FIX IF DRIVER DETECTION HAPPENS AND GLES2 MUST BE USED
+
 	gl_context->set_use_vsync(video_mode.use_vsync);
 #endif
 
@@ -1136,6 +1239,18 @@ Error OS_Windows::initialize(const VideoMode &p_desired, int p_video_driver, int
 		SetForegroundWindow(hWnd); // Slightly Higher Priority
 		SetFocus(hWnd); // Sets Keyboard Focus To
 	}
+
+	if (p_desired.layered_splash) {
+		set_window_per_pixel_transparency_enabled(true);
+	}
+
+	// IME
+	im_himc = ImmGetContext(hWnd);
+	ImmReleaseContext(hWnd, im_himc);
+
+	im_position = Vector2();
+
+	set_ime_active(false);
 
 	return OK;
 }
@@ -1261,6 +1376,8 @@ void OS_Windows::finalize() {
 
 void OS_Windows::finalize_core() {
 
+	timeEndPeriod(1);
+
 	memdelete(process_map);
 
 	TCPServerWinsock::cleanup();
@@ -1299,7 +1416,9 @@ void OS_Windows::set_mouse_mode(MouseMode p_mode) {
 	if (p_mode == MOUSE_MODE_CAPTURED || p_mode == MOUSE_MODE_HIDDEN) {
 		hCursor = SetCursor(NULL);
 	} else {
-		SetCursor(hCursor);
+		CursorShape c = cursor_shape;
+		cursor_shape = CURSOR_MAX;
+		set_cursor_shape(c);
 	}
 }
 
@@ -1394,12 +1513,6 @@ void OS_Windows::set_current_screen(int p_screen) {
 	set_window_position(ofs + get_screen_position(p_screen));
 }
 
-typedef struct {
-	int count;
-	int screen;
-	Point2 pos;
-} EnumPosData;
-
 static BOOL CALLBACK _MonitorEnumProcPos(HMONITOR hMonitor, HDC hdcMonitor, LPRECT lprcMonitor, LPARAM dwData) {
 
 	EnumPosData *data = (EnumPosData *)dwData;
@@ -1417,24 +1530,6 @@ Point2 OS_Windows::get_screen_position(int p_screen) const {
 	EnumPosData data = { 0, p_screen == -1 ? get_current_screen() : p_screen, Point2() };
 	EnumDisplayMonitors(NULL, NULL, _MonitorEnumProcPos, (LPARAM)&data);
 	return data.pos;
-}
-
-typedef struct {
-	int count;
-	int screen;
-	Size2 size;
-} EnumSizeData;
-
-static BOOL CALLBACK _MonitorEnumProcSize(HMONITOR hMonitor, HDC hdcMonitor, LPRECT lprcMonitor, LPARAM dwData) {
-
-	EnumSizeData *data = (EnumSizeData *)dwData;
-	if (data->count == data->screen) {
-		data->size.x = lprcMonitor->right - lprcMonitor->left;
-		data->size.y = lprcMonitor->bottom - lprcMonitor->top;
-	}
-
-	data->count++;
-	return TRUE;
 }
 
 Size2 OS_Windows::get_screen_size(int p_screen) const {
@@ -1496,15 +1591,15 @@ Size2 OS_Windows::get_real_window_size() const {
 }
 void OS_Windows::set_window_size(const Size2 p_size) {
 
-	video_mode.width = p_size.width;
-	video_mode.height = p_size.height;
+	int w = p_size.width;
+	int h = p_size.height;
+
+	video_mode.width = w;
+	video_mode.height = h;
 
 	if (video_mode.fullscreen) {
 		return;
 	}
-
-	int w = p_size.width;
-	int h = p_size.height;
 
 	RECT rect;
 	GetWindowRect(hWnd, &rect);
@@ -1518,11 +1613,23 @@ void OS_Windows::set_window_size(const Size2 p_size) {
 	}
 
 	MoveWindow(hWnd, rect.left, rect.top, w, h, TRUE);
+
+	// Don't let the mouse leave the window when resizing to a smaller resolution
+	if (mouse_mode == MOUSE_MODE_CONFINED) {
+		RECT rect;
+		GetClientRect(hWnd, &rect);
+		ClientToScreen(hWnd, (POINT *)&rect.left);
+		ClientToScreen(hWnd, (POINT *)&rect.right);
+		ClipCursor(&rect);
+	}
 }
 void OS_Windows::set_window_fullscreen(bool p_enabled) {
 
 	if (video_mode.fullscreen == p_enabled)
 		return;
+
+	if (layered_window)
+		set_window_per_pixel_transparency_enabled(false);
 
 	if (p_enabled) {
 
@@ -1628,12 +1735,100 @@ bool OS_Windows::is_window_always_on_top() const {
 	return video_mode.always_on_top;
 }
 
+bool OS_Windows::get_window_per_pixel_transparency_enabled() const {
+
+	if (!is_layered_allowed()) return false;
+	return layered_window;
+}
+
+void OS_Windows::set_window_per_pixel_transparency_enabled(bool p_enabled) {
+
+	if (!is_layered_allowed()) return;
+	if (layered_window != p_enabled) {
+		if (p_enabled) {
+			set_borderless_window(true);
+			//enable per-pixel alpha
+			hDC_dib = CreateCompatibleDC(GetDC(hWnd));
+
+			SetWindowLong(hWnd, GWL_EXSTYLE, GetWindowLong(hWnd, GWL_EXSTYLE) | WS_EX_LAYERED);
+
+			RECT r;
+			GetWindowRect(hWnd, &r);
+			dib_size = Size2(r.right - r.left, r.bottom - r.top);
+
+			BITMAPINFO bmi;
+			ZeroMemory(&bmi, sizeof(BITMAPINFO));
+			bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+			bmi.bmiHeader.biWidth = dib_size.x;
+			bmi.bmiHeader.biHeight = dib_size.y;
+			bmi.bmiHeader.biPlanes = 1;
+			bmi.bmiHeader.biBitCount = 32;
+			bmi.bmiHeader.biCompression = BI_RGB;
+			bmi.bmiHeader.biSizeImage = dib_size.x * dib_size.y * 4;
+			hBitmap = CreateDIBSection(hDC_dib, &bmi, DIB_RGB_COLORS, (void **)&dib_data, NULL, 0x0);
+			SelectObject(hDC_dib, hBitmap);
+
+			ZeroMemory(dib_data, dib_size.x * dib_size.y * 4);
+
+			layered_window = true;
+		} else {
+			//disable per-pixel alpha
+			layered_window = false;
+
+			SetWindowLong(hWnd, GWL_EXSTYLE, GetWindowLong(hWnd, GWL_EXSTYLE) & ~WS_EX_LAYERED);
+
+			//cleanup
+			DeleteObject(hBitmap);
+			DeleteDC(hDC_dib);
+		}
+	}
+}
+
+uint8_t *OS_Windows::get_layered_buffer_data() {
+
+	return (is_layered_allowed() && layered_window) ? dib_data : NULL;
+}
+
+Size2 OS_Windows::get_layered_buffer_size() {
+
+	return (is_layered_allowed() && layered_window) ? dib_size : Size2();
+}
+
+void OS_Windows::swap_layered_buffer() {
+
+	if (is_layered_allowed() && layered_window) {
+
+		//premultiply alpha
+		for (int y = 0; y < dib_size.y; y++) {
+			for (int x = 0; x < dib_size.x; x++) {
+				float alpha = (float)dib_data[y * (int)dib_size.x * 4 + x * 4 + 3] / (float)0xFF;
+				dib_data[y * (int)dib_size.x * 4 + x * 4 + 0] *= alpha;
+				dib_data[y * (int)dib_size.x * 4 + x * 4 + 1] *= alpha;
+				dib_data[y * (int)dib_size.x * 4 + x * 4 + 2] *= alpha;
+			}
+		}
+		//swap layered window buffer
+		POINT ptSrc = { 0, 0 };
+		SIZE sizeWnd = { (long)dib_size.x, (long)dib_size.y };
+		BLENDFUNCTION bf;
+		bf.BlendOp = AC_SRC_OVER;
+		bf.BlendFlags = 0;
+		bf.AlphaFormat = AC_SRC_ALPHA;
+		bf.SourceConstantAlpha = 0xFF;
+		UpdateLayeredWindow(hWnd, NULL, NULL, &sizeWnd, hDC_dib, &ptSrc, 0, &bf, ULW_ALPHA);
+	}
+}
+
 void OS_Windows::set_borderless_window(bool p_borderless) {
 	if (video_mode.borderless_window == p_borderless)
 		return;
 
+	if (!p_borderless && layered_window)
+		set_window_per_pixel_transparency_enabled(false);
+
 	video_mode.borderless_window = p_borderless;
 
+	preserve_window_size = true;
 	_update_window_style();
 }
 
@@ -1652,7 +1847,7 @@ void OS_Windows::_update_window_style(bool repaint) {
 		}
 	}
 
-	SetWindowPos(hWnd, video_mode.always_on_top ? HWND_TOPMOST : HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+	SetWindowPos(hWnd, video_mode.always_on_top ? HWND_TOPMOST : HWND_NOTOPMOST, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE);
 
 	if (repaint) {
 		RECT rect;
@@ -1863,6 +2058,11 @@ void OS_Windows::set_cursor_shape(CursorShape p_shape) {
 	if (cursor_shape == p_shape)
 		return;
 
+	if (mouse_mode != MOUSE_MODE_VISIBLE && mouse_mode != MOUSE_MODE_CONFINED) {
+		cursor_shape = p_shape;
+		return;
+	}
+
 	static const LPCTSTR win_cursors[CURSOR_MAX] = {
 		IDC_ARROW,
 		IDC_IBEAM,
@@ -1888,34 +2088,66 @@ void OS_Windows::set_cursor_shape(CursorShape p_shape) {
 	} else {
 		SetCursor(LoadCursor(hInstance, win_cursors[p_shape]));
 	}
+
 	cursor_shape = p_shape;
 }
 
 void OS_Windows::set_custom_mouse_cursor(const RES &p_cursor, CursorShape p_shape, const Vector2 &p_hotspot) {
 	if (p_cursor.is_valid()) {
 		Ref<Texture> texture = p_cursor;
-		Ref<Image> image = texture->get_data();
+		Ref<AtlasTexture> atlas_texture = p_cursor;
+		Ref<Image> image;
+		Size2 texture_size;
+		Rect2 atlas_rect;
 
-		UINT image_size = 32 * 32;
+		if (texture.is_valid()) {
+			image = texture->get_data();
+		}
+
+		if (!image.is_valid() && atlas_texture.is_valid()) {
+			texture = atlas_texture->get_atlas();
+
+			atlas_rect.size.width = texture->get_width();
+			atlas_rect.size.height = texture->get_height();
+			atlas_rect.position.x = atlas_texture->get_region().position.x;
+			atlas_rect.position.y = atlas_texture->get_region().position.y;
+
+			texture_size.width = atlas_texture->get_region().size.x;
+			texture_size.height = atlas_texture->get_region().size.y;
+		} else if (image.is_valid()) {
+			texture_size.width = texture->get_width();
+			texture_size.height = texture->get_height();
+		}
+
+		ERR_FAIL_COND(!texture.is_valid());
+		ERR_FAIL_COND(texture_size.width > 256 || texture_size.height > 256);
+
+		image = texture->get_data();
+
+		ERR_FAIL_COND(!image.is_valid());
+
+		UINT image_size = texture_size.width * texture_size.height;
 		UINT size = sizeof(UINT) * image_size;
 
-		ERR_FAIL_COND(texture->get_width() != 32 || texture->get_height() != 32);
-
 		// Create the BITMAP with alpha channel
-		COLORREF *buffer = (COLORREF *)malloc(sizeof(COLORREF) * image_size);
+		COLORREF *buffer = (COLORREF *)memalloc(sizeof(COLORREF) * image_size);
 
 		image->lock();
 		for (UINT index = 0; index < image_size; index++) {
-			int column_index = floor(index / 32);
-			int row_index = index % 32;
+			int row_index = floor(index / texture_size.width) + atlas_rect.position.y;
+			int column_index = (index % int(texture_size.width)) + atlas_rect.position.x;
 
-			Color pcColor = image->get_pixel(row_index, column_index);
-			*(buffer + index) = image->get_pixel(row_index, column_index).to_argb32();
+			if (atlas_texture.is_valid()) {
+				column_index = MIN(column_index, atlas_rect.size.width - 1);
+				row_index = MIN(row_index, atlas_rect.size.height - 1);
+			}
+
+			*(buffer + index) = image->get_pixel(column_index, row_index).to_argb32();
 		}
 		image->unlock();
 
 		// Using 4 channels, so 4 * 8 bits
-		HBITMAP bitmap = CreateBitmap(32, 32, 1, 4 * 8, buffer);
+		HBITMAP bitmap = CreateBitmap(texture_size.width, texture_size.height, 1, 4 * 8, buffer);
 		COLORREF clrTransparent = -1;
 
 		// Create the AND and XOR masks for the bitmap
@@ -1925,6 +2157,8 @@ void OS_Windows::set_custom_mouse_cursor(const RES &p_cursor, CursorShape p_shap
 		GetMaskBitmaps(bitmap, clrTransparent, hAndMask, hXorMask);
 
 		if (NULL == hAndMask || NULL == hXorMask) {
+			memfree(buffer);
+			DeleteObject(bitmap);
 			return;
 		}
 
@@ -1949,6 +2183,14 @@ void OS_Windows::set_custom_mouse_cursor(const RES &p_cursor, CursorShape p_shap
 		if (hXorMask != NULL) {
 			DeleteObject(hXorMask);
 		}
+
+		memfree(buffer);
+		DeleteObject(bitmap);
+	} else {
+		// Reset to default system cursor
+		cursors[p_shape] = NULL;
+		cursor_shape = CURSOR_MAX;
+		set_cursor_shape(p_shape);
 	}
 }
 
@@ -2014,10 +2256,6 @@ Error OS_Windows::execute(const String &p_path, const List<String> &p_arguments,
 			argss += String(" \"") + E->get() + "\"";
 		}
 
-		//print_line("ARGS: "+argss);
-		//argss+"\"";
-		//argss+=" 2>nul";
-
 		FILE *f = _wpopen(argss.c_str(), L"r");
 
 		ERR_FAIL_COND_V(!f, ERR_CANT_OPEN);
@@ -2044,15 +2282,12 @@ Error OS_Windows::execute(const String &p_path, const List<String> &p_arguments,
 		I = I->next();
 	};
 
-	//cmdline+="\"";
-
 	ProcessInfo pi;
 	ZeroMemory(&pi.si, sizeof(pi.si));
 	pi.si.cb = sizeof(pi.si);
 	ZeroMemory(&pi.pi, sizeof(pi.pi));
 	LPSTARTUPINFOW si_w = (LPSTARTUPINFOW)&pi.si;
 
-	print_line("running cmdline: " + cmdline);
 	Vector<CharType> modstr; //windows wants to change this no idea why
 	modstr.resize(cmdline.size());
 	for (int i = 0; i < cmdline.size(); i++)
@@ -2471,13 +2706,29 @@ String OS_Windows::get_unique_id() const {
 	return String(HwProfInfo.szHwProfileGuid);
 }
 
+void OS_Windows::set_ime_active(const bool p_active) {
+
+	if (p_active) {
+		ImmAssociateContext(hWnd, im_himc);
+
+		set_ime_position(im_position);
+	} else {
+		ImmAssociateContext(hWnd, (HIMC)0);
+	}
+}
+
 void OS_Windows::set_ime_position(const Point2 &p_pos) {
 
+	im_position = p_pos;
+
 	HIMC himc = ImmGetContext(hWnd);
+	if (himc == (HIMC)0)
+		return;
+
 	COMPOSITIONFORM cps;
 	cps.dwStyle = CFS_FORCE_POSITION;
-	cps.ptCurrentPos.x = p_pos.x;
-	cps.ptCurrentPos.y = p_pos.y;
+	cps.ptCurrentPos.x = im_position.x;
+	cps.ptCurrentPos.y = im_position.y;
 	ImmSetCompositionWindow(himc, &cps);
 	ImmReleaseContext(hWnd, himc);
 }
@@ -2559,6 +2810,8 @@ Error OS_Windows::move_to_trash(const String &p_path) {
 OS_Windows::OS_Windows(HINSTANCE _hInstance) {
 
 	key_event_pos = 0;
+	layered_window = false;
+	hBitmap = NULL;
 	force_quit = false;
 	alt_mem = false;
 	gr_mem = false;
@@ -2592,6 +2845,10 @@ OS_Windows::OS_Windows(HINSTANCE _hInstance) {
 }
 
 OS_Windows::~OS_Windows() {
+	if (is_layered_allowed() && layered_window) {
+		DeleteObject(hBitmap);
+		DeleteDC(hDC_dib);
+	}
 #ifdef STDOUT_FILE
 	fclose(stdo);
 #endif

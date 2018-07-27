@@ -220,16 +220,14 @@ void GDScript::_placeholder_erased(PlaceHolderScriptInstance *p_placeholder) {
 void GDScript::get_script_method_list(List<MethodInfo> *p_list) const {
 
 	for (const Map<StringName, GDScriptFunction *>::Element *E = member_functions.front(); E; E = E->next()) {
+		GDScriptFunction *func = E->get();
 		MethodInfo mi;
 		mi.name = E->key();
-		for (int i = 0; i < E->get()->get_argument_count(); i++) {
-			PropertyInfo arg;
-			arg.type = Variant::NIL; //variant
-			arg.name = E->get()->get_argument_name(i);
-			mi.arguments.push_back(arg);
+		for (int i = 0; i < func->get_argument_count(); i++) {
+			mi.arguments.push_back(func->get_argument_type(i));
 		}
 
-		mi.return_val.name = "Variant";
+		mi.return_val = func->get_return_type();
 		p_list->push_back(mi);
 	}
 }
@@ -277,16 +275,14 @@ MethodInfo GDScript::get_method_info(const StringName &p_method) const {
 	if (!E)
 		return MethodInfo();
 
+	GDScriptFunction *func = E->get();
 	MethodInfo mi;
 	mi.name = E->key();
-	for (int i = 0; i < E->get()->get_argument_count(); i++) {
-		PropertyInfo arg;
-		arg.type = Variant::NIL; //variant
-		arg.name = E->get()->get_argument_name(i);
-		mi.arguments.push_back(arg);
+	for (int i = 0; i < func->get_argument_count(); i++) {
+		mi.arguments.push_back(func->get_argument_type(i));
 	}
 
-	mi.return_val.name = "Variant";
+	mi.return_val = func->get_return_type();
 	return mi;
 }
 
@@ -941,8 +937,12 @@ bool GDScriptInstance::set(const StringName &p_name, const Variant &p_value) {
 				if (err.error == Variant::CallError::CALL_OK) {
 					return true; //function exists, call was successful
 				}
-			} else
+			} else {
+				if (!E->get().data_type.is_type(p_value)) {
+					return false; // Type mismatch
+				}
 				members[E->get().index] = p_value;
+			}
 			return true;
 		}
 	}
@@ -1220,7 +1220,7 @@ ScriptLanguage *GDScriptInstance::get_language() {
 	return GDScriptLanguage::get_singleton();
 }
 
-GDScriptInstance::RPCMode GDScriptInstance::get_rpc_mode(const StringName &p_method) const {
+MultiplayerAPI::RPCMode GDScriptInstance::get_rpc_mode(const StringName &p_method) const {
 
 	const GDScript *cscript = script.ptr();
 
@@ -1228,17 +1228,17 @@ GDScriptInstance::RPCMode GDScriptInstance::get_rpc_mode(const StringName &p_met
 		const Map<StringName, GDScriptFunction *>::Element *E = cscript->member_functions.find(p_method);
 		if (E) {
 
-			if (E->get()->get_rpc_mode() != RPC_MODE_DISABLED) {
+			if (E->get()->get_rpc_mode() != MultiplayerAPI::RPC_MODE_DISABLED) {
 				return E->get()->get_rpc_mode();
 			}
 		}
 		cscript = cscript->_base;
 	}
 
-	return RPC_MODE_DISABLED;
+	return MultiplayerAPI::RPC_MODE_DISABLED;
 }
 
-GDScriptInstance::RPCMode GDScriptInstance::get_rset_mode(const StringName &p_variable) const {
+MultiplayerAPI::RPCMode GDScriptInstance::get_rset_mode(const StringName &p_variable) const {
 
 	const GDScript *cscript = script.ptr();
 
@@ -1253,7 +1253,7 @@ GDScriptInstance::RPCMode GDScriptInstance::get_rset_mode(const StringName &p_va
 		cscript = cscript->_base;
 	}
 
-	return RPC_MODE_DISABLED;
+	return MultiplayerAPI::RPC_MODE_DISABLED;
 }
 
 void GDScriptInstance::reload_members() {
@@ -1331,6 +1331,15 @@ void GDScriptLanguage::_add_global(const StringName &p_name, const Variant &p_va
 void GDScriptLanguage::add_global_constant(const StringName &p_variable, const Variant &p_value) {
 
 	_add_global(p_variable, p_value);
+}
+
+void GDScriptLanguage::add_named_global_constant(const StringName &p_name, const Variant &p_value) {
+	named_globals[p_name] = p_value;
+}
+
+void GDScriptLanguage::remove_named_global_constant(const StringName &p_name) {
+	ERR_FAIL_COND(!named_globals.has(p_name));
+	named_globals.erase(p_name);
 }
 
 void GDScriptLanguage::init() {
@@ -1726,10 +1735,13 @@ void GDScriptLanguage::get_reserved_words(List<String> *p_words) const {
 		"NAN",
 		"self",
 		"true",
+		"void",
 		// functions
+		"as",
 		"assert",
 		"breakpoint",
 		"class",
+		"class_name",
 		"extends",
 		"is",
 		"func",
@@ -1760,6 +1772,9 @@ void GDScriptLanguage::get_reserved_words(List<String> *p_words) const {
 		"sync",
 		"master",
 		"slave",
+		"remotesync",
+		"mastersync",
+		"slavesync",
 		0
 	};
 
@@ -1774,6 +1789,82 @@ void GDScriptLanguage::get_reserved_words(List<String> *p_words) const {
 	for (int i = 0; i < GDScriptFunctions::FUNC_MAX; i++) {
 		p_words->push_back(GDScriptFunctions::get_func_name(GDScriptFunctions::Function(i)));
 	}
+}
+
+bool GDScriptLanguage::handles_global_class_type(const String &p_type) const {
+
+	return p_type == "GDScript";
+}
+
+String GDScriptLanguage::get_global_class_name(const String &p_path, String *r_base_type) const {
+
+	PoolVector<uint8_t> sourcef;
+	Error err;
+	FileAccess *f = FileAccess::open(p_path, FileAccess::READ, &err);
+	if (err) {
+		return String();
+	}
+
+	int len = f->get_len();
+	sourcef.resize(len + 1);
+	PoolVector<uint8_t>::Write w = sourcef.write();
+	int r = f->get_buffer(w.ptr(), len);
+	f->close();
+	memdelete(f);
+	ERR_FAIL_COND_V(r != len, String());
+	w[len] = 0;
+
+	String s;
+	if (s.parse_utf8((const char *)w.ptr())) {
+		return String();
+	}
+
+	GDScriptParser parser;
+
+	parser.parse(s, p_path.get_base_dir(), true, p_path);
+
+	if (parser.get_parse_tree() && parser.get_parse_tree()->type == GDScriptParser::Node::TYPE_CLASS) {
+
+		const GDScriptParser::ClassNode *c = static_cast<const GDScriptParser::ClassNode *>(parser.get_parse_tree());
+		if (r_base_type) {
+			GDScriptParser::DataType base_type;
+			if (c->base_type.has_type) {
+				base_type = c->base_type;
+				while (base_type.has_type && base_type.kind != GDScriptParser::DataType::NATIVE) {
+					switch (base_type.kind) {
+						case GDScriptParser::DataType::CLASS: {
+							base_type = base_type.class_type->base_type;
+						} break;
+						case GDScriptParser::DataType::GDSCRIPT: {
+							Ref<GDScript> gds = base_type.script_type;
+							if (gds.is_valid()) {
+								base_type.kind = GDScriptParser::DataType::NATIVE;
+								base_type.native_type = gds->get_instance_base_type();
+							} else {
+								base_type = GDScriptParser::DataType();
+							}
+						} break;
+						default: {
+							base_type = GDScriptParser::DataType();
+						} break;
+					}
+				}
+			}
+			if (base_type.has_type) {
+				*r_base_type = base_type.native_type;
+			} else {
+				// Fallback
+				if (c->extends_used && c->extends_class.size() == 1) {
+					*r_base_type = c->extends_class[0];
+				} else if (!c->extends_used) {
+					*r_base_type = "Reference";
+				}
+			}
+		}
+		return c->name;
+	}
+
+	return String();
 }
 
 GDScriptLanguage::GDScriptLanguage() {

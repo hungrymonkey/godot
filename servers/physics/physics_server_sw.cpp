@@ -65,6 +65,11 @@ RID PhysicsServerSW::shape_create(ShapeType p_shape) {
 
 			shape = memnew(CapsuleShapeSW);
 		} break;
+		case SHAPE_CYLINDER: {
+
+			ERR_EXPLAIN("CylinderShape is not supported in GodotPhysics. Please switch to Bullet in the Project Settings.");
+			ERR_FAIL_V(RID());
+		} break;
 		case SHAPE_CONVEX_POLYGON: {
 
 			shape = memnew(ConvexPolygonShapeSW);
@@ -695,6 +700,20 @@ real_t PhysicsServerSW::body_get_param(RID p_body, BodyParameter p_param) const 
 
 	return body->get_param(p_param);
 };
+
+void PhysicsServerSW::body_set_combine_mode(RID p_body, BodyParameter p_param, CombineMode p_mode) {
+	BodySW *body = body_owner.get(p_body);
+	ERR_FAIL_COND(!body);
+
+	body->set_combine_mode(p_param, p_mode);
+}
+
+PhysicsServer::CombineMode PhysicsServerSW::body_get_combine_mode(RID p_body, BodyParameter p_param) const {
+	BodySW *body = body_owner.get(p_body);
+	ERR_FAIL_COND_V(!body, COMBINE_MODE_INHERIT);
+
+	return body->get_combine_mode(p_param);
+}
 
 void PhysicsServerSW::body_set_kinematic_safe_margin(RID p_body, real_t p_margin) {
 	BodySW *body = body_owner.get(p_body);
@@ -1362,6 +1381,8 @@ void PhysicsServerSW::init() {
 
 void PhysicsServerSW::step(real_t p_step) {
 
+#ifndef _3D_DISABLED
+
 	if (!active)
 		return;
 
@@ -1382,6 +1403,7 @@ void PhysicsServerSW::step(real_t p_step) {
 		active_objects += E->get()->get_active_objects();
 		collision_pairs += E->get()->get_collision_pairs();
 	}
+#endif
 }
 
 void PhysicsServerSW::sync(){
@@ -1389,6 +1411,8 @@ void PhysicsServerSW::sync(){
 };
 
 void PhysicsServerSW::flush_queries() {
+
+#ifndef _3D_DISABLED
 
 	if (!active)
 		return;
@@ -1436,6 +1460,7 @@ void PhysicsServerSW::flush_queries() {
 
 		ScriptDebugger::get_singleton()->add_profiling_frame_data("physics", values);
 	}
+#endif
 };
 
 void PhysicsServerSW::finish() {

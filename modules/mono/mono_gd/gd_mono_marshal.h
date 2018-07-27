@@ -143,11 +143,6 @@ PoolVector2Array mono_array_to_PoolVector2Array(MonoArray *p_array);
 MonoArray *PoolVector3Array_to_mono_array(const PoolVector3Array &p_array);
 PoolVector3Array mono_array_to_PoolVector3Array(MonoArray *p_array);
 
-// Dictionary
-
-MonoObject *Dictionary_to_mono_object(const Dictionary &p_dict);
-Dictionary mono_object_to_Dictionary(MonoObject *p_dict);
-
 #ifdef YOLO_COPY
 #define MARSHALLED_OUT(m_t, m_in, m_out) m_t *m_out = (m_t *)&m_in;
 #define MARSHALLED_IN(m_t, m_in, m_out) m_t m_out = *reinterpret_cast<m_t *>(m_in);
@@ -195,13 +190,13 @@ Dictionary mono_object_to_Dictionary(MonoObject *p_dict);
 // Transform
 
 #define MARSHALLED_OUT_Transform(m_in, m_out) real_t m_out[12] = { \
-	m_in.basis[0].x, m_in.basis[1].x, m_in.basis[2].x,             \
-	m_in.basis[0].y, m_in.basis[1].y, m_in.basis[2].y,             \
-	m_in.basis[0].z, m_in.basis[1].z, m_in.basis[2].z,             \
+	m_in.basis[0].x, m_in.basis[0].y, m_in.basis[0].z,             \
+	m_in.basis[1].x, m_in.basis[1].y, m_in.basis[1].z,             \
+	m_in.basis[2].x, m_in.basis[2].y, m_in.basis[2].z,             \
 	m_in.origin.x, m_in.origin.y, m_in.origin.z                    \
 };
 #define MARSHALLED_IN_Transform(m_in, m_out) Transform m_out(                                   \
-		Basis(m_in[0], m_in[3], m_in[6], m_in[1], m_in[4], m_in[7], m_in[2], m_in[5], m_in[8]), \
+		Basis(m_in[0], m_in[1], m_in[2], m_in[3], m_in[4], m_in[5], m_in[6], m_in[7], m_in[8]), \
 		Vector3(m_in[9], m_in[10], m_in[11]));
 
 // AABB

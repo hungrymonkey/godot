@@ -780,8 +780,6 @@ ShaderCompilerGLES3::ShaderCompilerGLES3() {
 	actions[VS::SHADER_CANVAS_ITEM].renames["NORMAL"] = "normal";
 	actions[VS::SHADER_CANVAS_ITEM].renames["NORMALMAP"] = "normal_map";
 	actions[VS::SHADER_CANVAS_ITEM].renames["NORMALMAP_DEPTH"] = "normal_depth";
-	actions[VS::SHADER_CANVAS_ITEM].renames["UV"] = "uv_interp";
-	actions[VS::SHADER_CANVAS_ITEM].renames["COLOR"] = "color";
 	actions[VS::SHADER_CANVAS_ITEM].renames["TEXTURE"] = "color_texture";
 	actions[VS::SHADER_CANVAS_ITEM].renames["TEXTURE_PIXEL_SIZE"] = "color_texpixel_size";
 	actions[VS::SHADER_CANVAS_ITEM].renames["NORMAL_TEXTURE"] = "normal_texture";
@@ -795,7 +793,6 @@ ShaderCompilerGLES3::ShaderCompilerGLES3() {
 	actions[VS::SHADER_CANVAS_ITEM].renames["LIGHT_HEIGHT"] = "light_height";
 	actions[VS::SHADER_CANVAS_ITEM].renames["LIGHT_COLOR"] = "light_color";
 	actions[VS::SHADER_CANVAS_ITEM].renames["LIGHT_UV"] = "light_uv";
-	//actions[VS::SHADER_CANVAS_ITEM].renames["LIGHT_SHADOW_COLOR"]="light_shadow_color";
 	actions[VS::SHADER_CANVAS_ITEM].renames["LIGHT"] = "light";
 	actions[VS::SHADER_CANVAS_ITEM].renames["SHADOW_COLOR"] = "shadow_color";
 
@@ -805,9 +802,7 @@ ShaderCompilerGLES3::ShaderCompilerGLES3() {
 	actions[VS::SHADER_CANVAS_ITEM].usage_defines["SCREEN_PIXEL_SIZE"] = "@SCREEN_UV";
 	actions[VS::SHADER_CANVAS_ITEM].usage_defines["NORMAL"] = "#define NORMAL_USED\n";
 	actions[VS::SHADER_CANVAS_ITEM].usage_defines["NORMALMAP"] = "#define NORMALMAP_USED\n";
-	actions[VS::SHADER_CANVAS_ITEM].usage_defines["SHADOW_COLOR"] = "#define SHADOW_COLOR_USED\n";
 	actions[VS::SHADER_CANVAS_ITEM].usage_defines["LIGHT"] = "#define USE_LIGHT_SHADER_CODE\n";
-
 	actions[VS::SHADER_CANVAS_ITEM].render_mode_defines["skip_vertex_transform"] = "#define SKIP_TRANSFORM_USED\n";
 
 	/** SPATIAL SHADER **/
@@ -827,7 +822,7 @@ ShaderCompilerGLES3::ShaderCompilerGLES3() {
 	actions[VS::SHADER_SPATIAL].renames["UV2"] = "uv2_interp";
 	actions[VS::SHADER_SPATIAL].renames["COLOR"] = "color_interp";
 	actions[VS::SHADER_SPATIAL].renames["POINT_SIZE"] = "gl_PointSize";
-	//actions[VS::SHADER_SPATIAL].renames["INSTANCE_ID"]=ShaderLanguage::TYPE_INT;
+	actions[VS::SHADER_SPATIAL].renames["INSTANCE_ID"] = "gl_InstanceID";
 
 	//builtins
 
@@ -849,13 +844,11 @@ ShaderCompilerGLES3::ShaderCompilerGLES3() {
 	actions[VS::SHADER_SPATIAL].renames["CLEARCOAT_GLOSS"] = "clearcoat_gloss";
 	actions[VS::SHADER_SPATIAL].renames["ANISOTROPY"] = "anisotropy";
 	actions[VS::SHADER_SPATIAL].renames["ANISOTROPY_FLOW"] = "anisotropy_flow";
-	//actions[VS::SHADER_SPATIAL].renames["SSS_SPREAD"] = "sss_spread";
 	actions[VS::SHADER_SPATIAL].renames["SSS_STRENGTH"] = "sss_strength";
 	actions[VS::SHADER_SPATIAL].renames["TRANSMISSION"] = "transmission";
 	actions[VS::SHADER_SPATIAL].renames["AO"] = "ao";
 	actions[VS::SHADER_SPATIAL].renames["AO_LIGHT_AFFECT"] = "ao_light_affect";
 	actions[VS::SHADER_SPATIAL].renames["EMISSION"] = "emission";
-	//actions[VS::SHADER_SPATIAL].renames["SCREEN_UV"]=ShaderLanguage::TYPE_VEC2;
 	actions[VS::SHADER_SPATIAL].renames["POINT_COORD"] = "gl_PointCoord";
 	actions[VS::SHADER_SPATIAL].renames["INSTANCE_CUSTOM"] = "instance_custom";
 	actions[VS::SHADER_SPATIAL].renames["SCREEN_UV"] = "screen_uv";
@@ -897,10 +890,9 @@ ShaderCompilerGLES3::ShaderCompilerGLES3() {
 	actions[VS::SHADER_SPATIAL].usage_defines["DIFFUSE_LIGHT"] = "#define USE_LIGHT_SHADER_CODE\n";
 	actions[VS::SHADER_SPATIAL].usage_defines["SPECULAR_LIGHT"] = "#define USE_LIGHT_SHADER_CODE\n";
 
-	actions[VS::SHADER_SPATIAL].renames["SSS_STRENGTH"] = "sss_strength";
-
 	actions[VS::SHADER_SPATIAL].render_mode_defines["skip_vertex_transform"] = "#define SKIP_TRANSFORM_USED\n";
 	actions[VS::SHADER_SPATIAL].render_mode_defines["world_vertex_coords"] = "#define VERTEX_WORLD_COORDS_USED\n";
+	actions[VS::SHADER_SPATIAL].render_mode_defines["ensure_correct_normals"] = "#define ENSURE_CORRECT_NORMALS\n";
 	actions[VS::SHADER_SPATIAL].render_mode_defines["cull_front"] = "#define DO_SIDE_CHECK\n";
 	actions[VS::SHADER_SPATIAL].render_mode_defines["cull_disabled"] = "#define DO_SIDE_CHECK\n";
 
@@ -914,6 +906,8 @@ ShaderCompilerGLES3::ShaderCompilerGLES3() {
 	actions[VS::SHADER_SPATIAL].render_mode_defines["specular_phong"] = "#define SPECULAR_PHONG\n";
 	actions[VS::SHADER_SPATIAL].render_mode_defines["specular_toon"] = "#define SPECULAR_TOON\n";
 	actions[VS::SHADER_SPATIAL].render_mode_defines["specular_disabled"] = "#define SPECULAR_DISABLED\n";
+	actions[VS::SHADER_SPATIAL].render_mode_defines["shadows_disabled"] = "#define SHADOWS_DISABLED\n";
+	actions[VS::SHADER_SPATIAL].render_mode_defines["ambient_light_disabled"] = "#define AMBIENT_LIGHT_DISABLED\n";
 
 	/* PARTICLES SHADER */
 

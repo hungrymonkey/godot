@@ -40,7 +40,6 @@
 void Mesh::_clear_triangle_mesh() const {
 
 	triangle_mesh.unref();
-	;
 }
 
 Ref<TriangleMesh> Mesh::generate_triangle_mesh() const {
@@ -108,6 +107,54 @@ Ref<TriangleMesh> Mesh::generate_triangle_mesh() const {
 	triangle_mesh->create(faces);
 
 	return triangle_mesh;
+}
+
+void Mesh::generate_debug_mesh_lines(Vector<Vector3> &r_lines) {
+
+	Ref<TriangleMesh> tm = generate_triangle_mesh();
+	if (tm.is_null())
+		return;
+
+	PoolVector<int> triangle_indices;
+	tm->get_indices(&triangle_indices);
+	const int triangles_num = tm->get_triangles().size();
+	PoolVector<Vector3> vertices = tm->get_vertices();
+
+	r_lines.resize(tm->get_triangles().size() * 6); // 3 lines x 2 points each line
+
+	PoolVector<int>::Read ind_r = triangle_indices.read();
+	PoolVector<Vector3>::Read ver_r = vertices.read();
+	for (int j = 0, x = 0, i = 0; i < triangles_num; j += 6, x += 3, ++i) {
+		// Triangle line 1
+		r_lines[j + 0] = ver_r[ind_r[x + 0]];
+		r_lines[j + 1] = ver_r[ind_r[x + 1]];
+
+		// Triangle line 2
+		r_lines[j + 2] = ver_r[ind_r[x + 1]];
+		r_lines[j + 3] = ver_r[ind_r[x + 2]];
+
+		// Triangle line 3
+		r_lines[j + 4] = ver_r[ind_r[x + 2]];
+		r_lines[j + 5] = ver_r[ind_r[x + 0]];
+	}
+}
+void Mesh::generate_debug_mesh_indices(Vector<Vector3> &r_points) {
+	Ref<TriangleMesh> tm = generate_triangle_mesh();
+	if (tm.is_null())
+		return;
+
+	PoolVector<Vector3> vertices = tm->get_vertices();
+
+	int vertices_size = vertices.size();
+	r_points.resize(vertices_size);
+	for (int i = 0; i < vertices_size; ++i) {
+		r_points[i] = vertices[i];
+	}
+}
+
+bool Mesh::surface_is_softbody_friendly(int p_idx) const {
+	const uint32_t surface_format = surface_get_format(p_idx);
+	return (surface_format & Mesh::ARRAY_FLAG_USE_DYNAMIC_UPDATE && (!(surface_format & Mesh::ARRAY_COMPRESS_VERTEX)) && (!(surface_format & Mesh::ARRAY_COMPRESS_NORMAL)));
 }
 
 PoolVector<Face3> Mesh::get_faces() const {
@@ -222,7 +269,6 @@ Ref<Mesh> Mesh::create_outline(float p_margin) const {
 			continue;
 
 		Array a = surface_get_arrays(i);
-		int vcount = 0;
 
 		if (i == 0) {
 			arrays = a;
@@ -230,6 +276,7 @@ Ref<Mesh> Mesh::create_outline(float p_margin) const {
 			index_accum += v.size();
 		} else {
 
+			int vcount = 0;
 			for (int j = 0; j < arrays.size(); j++) {
 
 				if (arrays[j].get_type() == Variant::NIL || a[j].get_type() == Variant::NIL) {
@@ -314,6 +361,8 @@ Ref<Mesh> Mesh::create_outline(float p_margin) const {
 			}
 		}
 	}
+
+	ERR_FAIL_COND_V(arrays.size() != ARRAY_MAX, Ref<ArrayMesh>());
 
 	{
 		PoolVector<int>::Write ir;
@@ -480,6 +529,10 @@ void Mesh::_bind_methods() {
 	BIND_ENUM_CONSTANT(ARRAY_WEIGHTS);
 	BIND_ENUM_CONSTANT(ARRAY_INDEX);
 	BIND_ENUM_CONSTANT(ARRAY_MAX);
+}
+
+void Mesh::clear_cache() {
+	_clear_triangle_mesh();
 }
 
 Mesh::Mesh() {
@@ -910,6 +963,7 @@ void ArrayMesh::surface_set_material(int p_idx, const Ref<Material> &p_material)
 	VisualServer::get_singleton()->mesh_surface_set_material(mesh, p_idx, p_material.is_null() ? RID() : p_material->get_rid());
 
 	_change_notify("material");
+	emit_changed();
 }
 
 void ArrayMesh::surface_set_name(int p_idx, const String &p_name) {
@@ -917,6 +971,7 @@ void ArrayMesh::surface_set_name(int p_idx, const String &p_name) {
 	ERR_FAIL_INDEX(p_idx, surfaces.size());
 
 	surfaces[p_idx].name = p_name;
+	emit_changed();
 }
 
 String ArrayMesh::surface_get_name(int p_idx) const {
@@ -929,6 +984,7 @@ void ArrayMesh::surface_update_region(int p_surface, int p_offset, const PoolVec
 
 	ERR_FAIL_INDEX(p_surface, surfaces.size());
 	VS::get_singleton()->mesh_surface_update_region(mesh, p_surface, p_offset, p_data);
+	emit_changed();
 }
 
 void ArrayMesh::surface_set_custom_aabb(int p_idx, const AABB &p_aabb) {
@@ -936,6 +992,7 @@ void ArrayMesh::surface_set_custom_aabb(int p_idx, const AABB &p_aabb) {
 	ERR_FAIL_INDEX(p_idx, surfaces.size());
 	surfaces[p_idx].aabb = p_aabb;
 	// set custom aabb too?
+	emit_changed();
 }
 
 Ref<Material> ArrayMesh::surface_get_material(int p_idx) const {
@@ -984,6 +1041,7 @@ void ArrayMesh::set_custom_aabb(const AABB &p_custom) {
 
 	custom_aabb = p_custom;
 	VS::get_singleton()->mesh_set_custom_aabb(mesh, custom_aabb);
+	emit_changed();
 }
 
 AABB ArrayMesh::get_custom_aabb() const {
@@ -1186,8 +1244,6 @@ Error ArrayMesh::lightmap_unwrap(const Transform &p_base_transform, float p_texe
 		int surface = uv_index[gen_vertices[gen_indices[i + 0]]].first;
 
 		for (int j = 0; j < 3; j++) {
-
-			int vertex_idx = gen_vertices[gen_indices[i + j]];
 
 			SurfaceTool::Vertex v = surfaces[surface].vertices[uv_index[gen_vertices[gen_indices[i + j]]].second];
 

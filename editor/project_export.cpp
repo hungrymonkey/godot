@@ -76,12 +76,22 @@ void ProjectExportDialog::popup_export() {
 	}
 
 	_update_presets();
+	if (presets->get_current() >= 0) {
+		_edit_preset(presets->get_current()); // triggers rescan for templates if newly installed
+	}
 
 	// Restore valid window bounds or pop up at default size.
 	if (EditorSettings::get_singleton()->has_setting("interface/dialogs/export_bounds")) {
 		popup(EditorSettings::get_singleton()->get("interface/dialogs/export_bounds"));
 	} else {
-		popup_centered_ratio();
+
+		Size2 popup_size = Size2(900, 700) * editor_get_scale();
+		Size2 window_size = get_viewport_rect().size;
+
+		popup_size.x = MIN(window_size.x * 0.8, popup_size.x);
+		popup_size.y = MIN(window_size.y * 0.8, popup_size.y);
+
+		popup_centered(popup_size);
 	}
 }
 
@@ -147,7 +157,6 @@ void ProjectExportDialog::_update_presets() {
 
 	if (current_idx != -1) {
 		presets->select(current_idx);
-		//_edit_preset(current_idx);
 	}
 
 	updating = false;
@@ -160,6 +169,7 @@ void ProjectExportDialog::_edit_preset(int p_index) {
 		name->set_editable(false);
 		runnable->set_disabled(true);
 		parameters->edit(NULL);
+		presets->unselect_all();
 		delete_preset->set_disabled(true);
 		sections->hide();
 		patches->clear();
@@ -207,9 +217,9 @@ void ProjectExportDialog::_edit_preset(int p_index) {
 	TreeItem *patch_add = patches->create_item(patch_root);
 	patch_add->set_metadata(0, patchlist.size());
 	if (patchlist.size() == 0)
-		patch_add->set_text(0, "Add initial export..");
+		patch_add->set_text(0, "Add initial export...");
 	else
-		patch_add->set_text(0, "Add previous patches..");
+		patch_add->set_text(0, "Add previous patches...");
 
 	patch_add->add_button(0, get_icon("folder", "FileDialog"), 1);
 
@@ -431,11 +441,9 @@ void ProjectExportDialog::_delete_preset() {
 void ProjectExportDialog::_delete_preset_confirm() {
 
 	int idx = presets->get_current();
-	parameters->edit(NULL); //to avoid crash
 	_edit_preset(-1);
 	EditorExport::get_singleton()->remove_export_preset(idx);
 	_update_presets();
-	_edit_preset(presets->get_current());
 }
 
 Variant ProjectExportDialog::get_drag_data_fw(const Point2 &p_point, Control *p_from) {
@@ -703,9 +711,9 @@ void ProjectExportDialog::_export_pck_zip_selected(const String &p_path) {
 	ERR_FAIL_COND(platform.is_null());
 
 	if (p_path.ends_with(".zip")) {
-		platform->save_zip(current, p_path);
+		platform->export_zip(current, export_pck_zip_debug->is_pressed(), p_path);
 	} else if (p_path.ends_with(".pck")) {
-		platform->save_pack(current, p_path);
+		platform->export_pack(current, export_pck_zip_debug->is_pressed(), p_path);
 	}
 }
 
@@ -803,7 +811,7 @@ ProjectExportDialog::ProjectExportDialog() {
 	preset_vb->add_child(preset_hb);
 
 	add_preset = memnew(MenuButton);
-	add_preset->set_text(TTR("Add.."));
+	add_preset->set_text(TTR("Add..."));
 	add_preset->get_popup()->connect("index_pressed", this, "_add_preset");
 	preset_hb->add_child(add_preset);
 	MarginContainer *mc = memnew(MarginContainer);
@@ -981,11 +989,20 @@ ProjectExportDialog::ProjectExportDialog() {
 	export_debug->set_pressed(true);
 	export_project->get_vbox()->add_child(export_debug);
 
+	export_pck_zip_debug = memnew(CheckButton);
+	export_pck_zip_debug->set_text(TTR("Export With Debug"));
+	export_pck_zip_debug->set_pressed(true);
+	export_pck_zip->get_vbox()->add_child(export_pck_zip_debug);
+
 	set_hide_on_ok(false);
 
 	editor_icons = "EditorIcons";
 
 	default_filename = EditorSettings::get_singleton()->get_project_metadata("export_options", "default_filename", String());
+
+	if (default_filename == "") {
+		default_filename = ProjectSettings::get_singleton()->get("application/config/name");
+	}
 }
 
 ProjectExportDialog::~ProjectExportDialog() {

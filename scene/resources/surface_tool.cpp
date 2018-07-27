@@ -421,6 +421,7 @@ Ref<ArrayMesh> SurfaceTool::commit(const Ref<ArrayMesh> &p_existing, uint32_t p_
 	Array a = commit_to_arrays();
 
 	mesh->add_surface_from_arrays(primitive, a, Array(), p_flags);
+
 	if (material.is_valid())
 		mesh->surface_set_material(surface, material);
 
@@ -861,7 +862,7 @@ void SurfaceTool::generate_tangents() {
 	}
 }
 
-void SurfaceTool::generate_normals() {
+void SurfaceTool::generate_normals(bool p_flip) {
 
 	ERR_FAIL_COND(primitive != Mesh::PRIMITIVE_TRIANGLES);
 
@@ -887,7 +888,11 @@ void SurfaceTool::generate_normals() {
 		ERR_FAIL_COND(!v[2]);
 		E = v[2]->next();
 
-		Vector3 normal = Plane(v[0]->get().vertex, v[1]->get().vertex, v[2]->get().vertex).normal;
+		Vector3 normal;
+		if (!p_flip)
+			normal = Plane(v[0]->get().vertex, v[1]->get().vertex, v[2]->get().vertex).normal;
+		else
+			normal = Plane(v[2]->get().vertex, v[1]->get().vertex, v[0]->get().vertex).normal;
 
 		if (smooth) {
 
@@ -980,7 +985,7 @@ void SurfaceTool::_bind_methods() {
 
 	ClassDB::bind_method(D_METHOD("index"), &SurfaceTool::index);
 	ClassDB::bind_method(D_METHOD("deindex"), &SurfaceTool::deindex);
-	ClassDB::bind_method(D_METHOD("generate_normals"), &SurfaceTool::generate_normals);
+	ClassDB::bind_method(D_METHOD("generate_normals", "flip"), &SurfaceTool::generate_normals, DEFVAL(false));
 	ClassDB::bind_method(D_METHOD("generate_tangents"), &SurfaceTool::generate_tangents);
 
 	ClassDB::bind_method(D_METHOD("add_to_format", "flags"), &SurfaceTool::add_to_format);

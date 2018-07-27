@@ -114,7 +114,7 @@ void ScrollBar::_gui_input(Ref<InputEvent> p_event) {
 
 				if (smooth_scroll_enabled) {
 					scrolling = true;
-					set_physics_process(true);
+					set_physics_process_internal(true);
 				} else {
 					set_value(target_scroll);
 				}
@@ -138,7 +138,7 @@ void ScrollBar::_gui_input(Ref<InputEvent> p_event) {
 
 				if (smooth_scroll_enabled) {
 					scrolling = true;
-					set_physics_process(true);
+					set_physics_process_internal(true);
 				} else {
 					set_value(target_scroll);
 				}
@@ -257,9 +257,7 @@ void ScrollBar::_notification(int p_what) {
 
 		Point2 ofs;
 
-		VisualServer *vs = VisualServer::get_singleton();
-
-		vs->canvas_item_add_texture_rect(ci, Rect2(Point2(), decr->get_size()), decr->get_rid());
+		decr->draw(ci, Point2());
 
 		if (orientation == HORIZONTAL)
 			ofs.x += decr->get_width();
@@ -280,7 +278,7 @@ void ScrollBar::_notification(int p_what) {
 		else
 			ofs.height += area.height;
 
-		vs->canvas_item_add_texture_rect(ci, Rect2(ofs, decr->get_size()), incr->get_rid());
+		incr->draw(ci, ofs);
 		Rect2 grabber_rect;
 
 		if (orientation == HORIZONTAL) {
@@ -322,7 +320,7 @@ void ScrollBar::_notification(int p_what) {
 		drag_slave = NULL;
 	}
 
-	if (p_what == NOTIFICATION_PHYSICS_PROCESS) {
+	if (p_what == NOTIFICATION_INTERNAL_PHYSICS_PROCESS) {
 
 		if (scrolling) {
 			if (get_value() != target_scroll) {
@@ -337,7 +335,7 @@ void ScrollBar::_notification(int p_what) {
 				}
 			} else {
 				scrolling = false;
-				set_physics_process(false);
+				set_physics_process_internal(false);
 			}
 		} else if (drag_slave_touching) {
 
@@ -397,7 +395,7 @@ void ScrollBar::_notification(int p_what) {
 				}
 
 				if (turnoff) {
-					set_physics_process(false);
+					set_physics_process_internal(false);
 					drag_slave_touching = false;
 					drag_slave_touching_deaccel = false;
 				}
@@ -566,7 +564,7 @@ void ScrollBar::_drag_slave_input(const Ref<InputEvent> &p_input) {
 		if (mb->is_pressed()) {
 
 			if (drag_slave_touching) {
-				set_physics_process(false);
+				set_physics_process_internal(false);
 				drag_slave_touching_deaccel = false;
 				drag_slave_touching = false;
 				drag_slave_speed = Vector2();
@@ -586,7 +584,7 @@ void ScrollBar::_drag_slave_input(const Ref<InputEvent> &p_input) {
 				drag_slave_touching_deaccel = false;
 				time_since_motion = 0;
 				if (drag_slave_touching) {
-					set_physics_process(true);
+					set_physics_process_internal(true);
 					time_since_motion = 0;
 				}
 			}
@@ -598,7 +596,7 @@ void ScrollBar::_drag_slave_input(const Ref<InputEvent> &p_input) {
 				if (drag_slave_speed == Vector2()) {
 					drag_slave_touching_deaccel = false;
 					drag_slave_touching = false;
-					set_physics_process(false);
+					set_physics_process_internal(false);
 				} else {
 
 					drag_slave_touching_deaccel = true;
