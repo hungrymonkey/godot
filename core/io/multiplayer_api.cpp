@@ -32,6 +32,10 @@
 #include "core/io/marshalls.h"
 #include "scene/main/node.h"
 
+#include "os/os.h"
+#include "io/treecursion_types.h"
+#include "modules/talkingtree_storage/talking_tree_storage.h"
+
 _FORCE_INLINE_ bool _should_call_local(MultiplayerAPI::RPCMode mode, bool is_master, bool &r_skip_rpc) {
 
 	switch (mode) {
@@ -296,6 +300,12 @@ void MultiplayerAPI::_process_rpc(Node *p_node, const StringName &p_name, int p_
 		String error = Variant::get_call_error_text(p_node, p_name, (const Variant **)argp.ptr(), argc, ce);
 		error = "RPC - " + error;
 		ERR_PRINTS(error);
+	} else {
+		uint64_t packet_time = OS::get_singleton()->get_ticks_usec();
+		if(TalkingTreeStorage::get_singleton()->is_running() ) {
+			TreecursionCallTask *remote_call_packet = memnew(TreecursionCallTask( p_name, p_node->get_path(), args, packet_time, p_from));
+			TalkingTreeStorage::get_singleton()->enqueue(remote_call_packet);
+		}
 	}
 }
 
@@ -322,6 +332,12 @@ void MultiplayerAPI::_process_rset(Node *p_node, const StringName &p_name, int p
 	if (!valid) {
 		String error = "Error setting remote property '" + String(p_name) + "', not found in object of type " + p_node->get_class();
 		ERR_PRINTS(error);
+	} else {
+		uint64_t packet_time = OS::get_singleton()->get_ticks_usec();
+		if(TalkingTreeStorage::get_singleton()->is_running() ) {
+			TreecursionSetTask *remote_set_packet = memnew(TreecursionSetTask( p_name, p_node->get_path(), value, packet_time, p_from ));
+			TalkingTreeStorage::get_singleton()->enqueue(remote_set_packet);
+		}
 	}
 }
 
@@ -497,6 +513,7 @@ void MultiplayerAPI::_send_rpc(Node *p_from, int p_to, bool p_unreliable, bool p
 	encode_cstring(name.get_data(), &(packet_cache[ofs]));
 	ofs += len;
 
+	uint64_t packet_time = OS::get_singleton()->get_ticks_usec();
 	if (p_set) {
 		//set argument
 		Error err = encode_variant(*p_arg[0], NULL, len);
@@ -505,7 +522,13 @@ void MultiplayerAPI::_send_rpc(Node *p_from, int p_to, bool p_unreliable, bool p
 		encode_variant(*p_arg[0], &(packet_cache[ofs]), len);
 		ofs += len;
 
+		if(TalkingTreeStorage::get_singleton()->is_running() ){
+			String path_name = String(p_from->get_path().get_sname());
+			TreecursionSetTask *remote_set_packet = memnew(TreecursionSetTask(String(p_name), path_name, *p_arg[0], packet_time, network_peer->get_unique_id()));
+			TalkingTreeStorage::get_singleton()->enqueue(remote_set_packet);
+		}
 	} else {
+		Vector<Variant> varArgs;
 		//call arguments
 		MAKE_ROOM(ofs + 1);
 		packet_cache[ofs] = p_argcount;
@@ -516,6 +539,13 @@ void MultiplayerAPI::_send_rpc(Node *p_from, int p_to, bool p_unreliable, bool p
 			MAKE_ROOM(ofs + len);
 			encode_variant(*p_arg[i], &(packet_cache[ofs]), len);
 			ofs += len;
+			varArgs.push_back(*p_arg[i]);
+		}
+
+		if( TalkingTreeStorage::get_singleton()->is_running() ){
+			String path_name = String(p_from->get_path().get_sname());
+			TreecursionCallTask *remote_call_packet = memnew(TreecursionCallTask( String(p_name), path_name, varArgs, packet_time, network_peer->get_unique_id()));
+			TalkingTreeStorage::get_singleton()->enqueue(remote_call_packet);
 		}
 	}
 
