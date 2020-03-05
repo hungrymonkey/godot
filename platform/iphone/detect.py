@@ -139,33 +139,32 @@ def configure(env):
     if (env["arch"] == "arm64"):
         env.Append(LINKFLAGS=['-arch', 'arm64', '-Wl,-dead_strip', '-miphoneos-version-min=10.0'])
 
-    env.Append(LINKFLAGS=['-isysroot', '$IPHONESDK',
-                          '-framework', 'AudioToolbox',
-                          '-framework', 'AVFoundation',
-                          '-framework', 'CoreAudio',
-                          '-framework', 'CoreGraphics',
-                          '-framework', 'CoreMedia',
-                          '-framework', 'CoreVideo',
-                          '-framework', 'CoreMotion',
-                          '-framework', 'Foundation',
-                          '-framework', 'GameController',
-                          '-framework', 'MediaPlayer',
-                          '-framework', 'Metal',
-                          '-framework', 'QuartzCore',
-                          '-framework', 'Security',
-                          '-framework', 'SystemConfiguration',
-                          '-framework', 'UIKit',
-                          '-framework', 'ARKit',
-                          ])
+    env.Append(LINKFLAGS=['-isysroot', '$IPHONESDK'])
+    env.AppendUnique(FRAMEWORKS=['AudioToolbox',
+                                 'AVFoundation',
+                                 'CoreAudio',
+                                 'CoreGraphics',
+                                 'CoreMedia',
+                                 'CoreVideo',
+                                 'CoreMotion',
+                                 'Foundation',
+                                 'GameController',
+                                 'MediaPlayer',
+                                 'Metal',
+                                 'QuartzCore',
+                                 'Security',
+                                 'SystemConfiguration',
+                                 'UIKit',
+                                 'ARKit'])
 
     # Feature options
     if env['game_center']:
         env.Append(CPPDEFINES=['GAME_CENTER_ENABLED'])
-        env.Append(LINKFLAGS=['-framework', 'GameKit'])
+        env.AppendUnique(FRAMEWORKS=['GameKit'])
 
     if env['store_kit']:
         env.Append(CPPDEFINES=['STOREKIT_ENABLED'])
-        env.Append(LINKFLAGS=['-framework', 'StoreKit'])
+        env.AppendUnique(FRAMEWORKS=['StoreKit'])
 
     if env['icloud']:
         env.Append(CPPDEFINES=['ICLOUD_ENABLED'])
@@ -180,9 +179,9 @@ def configure(env):
     env.Append(CPPDEFINES=['IPHONE_ENABLED', 'UNIX_ENABLED', 'COREAUDIO_ENABLED'])
 
     env.Append(CPPDEFINES=['VULKAN_ENABLED'])
-    env.Append(LINKFLAGS=['-framework', 'IOSurface'])
+    env.AppendUnique(FRAMEWORKS=['IOSurface'])
     if (env['use_static_mvk']):
-        env.Append(LINKFLAGS=['-framework', 'MoltenVK'])
+        env.AppendUnique(FRAMEWORKS=['MoltenVK'])
         env['builtin_vulkan'] = False
     elif not env['builtin_vulkan']:
         env.Append(LIBS=['vulkan'])
